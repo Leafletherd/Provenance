@@ -1,0 +1,22 @@
+# Swift / SPM
+.build/
+.swiftpm/
+*.o
+*.d
+
+# Xcode
+*.xcodeproj
+*.xcworkspace
+xcuserdata/
+DerivedData/
+
+# App bundle output
+build/
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Provenance ledger data (project tracking, not source)
+.ledger/
