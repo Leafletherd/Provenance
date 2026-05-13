@@ -13,7 +13,10 @@ struct Project: Identifiable, Codable, Hashable {
     /// setting in Settings → Privacy. `true`/`false` forces tracking on/off for this project.
     var trackPasteSources: Bool?
 
-    var ledgerURL: URL      { folderURL.appendingPathComponent(".ledger") }
+    var ledgerURL: URL       { folderURL.appendingPathComponent(".ledger") }
+    /// The .provenance.bundle directory written at the project root (outside .ledger/).
+    /// Visible to git and to other tools like Works.
+    var bundleURL: URL       { folderURL.appendingPathComponent(".provenance.bundle") }
     var snapshotsURL: URL  { ledgerURL.appendingPathComponent("snapshots") }
     var attachmentsURL: URL { ledgerURL.appendingPathComponent("attachments") }
     var exportURL: URL     { ledgerURL.appendingPathComponent("export") }

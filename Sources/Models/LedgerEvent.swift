@@ -16,6 +16,7 @@ enum LedgerEventType: String, Codable, CaseIterable {
     case nestedRepoDetected  = "nested_repo_detected"
     case seedPromoted        = "seed_promoted"
     case paste               = "paste"
+    case bundleExported      = "bundle_exported"
     case error               = "error"
 
     var displayName: String {
@@ -35,6 +36,7 @@ enum LedgerEventType: String, Codable, CaseIterable {
         case .nestedRepoDetected:  return "Nested Repo"
         case .seedPromoted:        return "Seed Promoted"
         case .paste:               return "Paste Source"
+        case .bundleExported:      return "Bundle Exported"
         case .error:               return "Error"
         }
     }

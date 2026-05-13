@@ -14,9 +14,7 @@ struct ProjectView: View {
     @ObservedObject var state: ProjectState
     @EnvironmentObject var appState: AppState
     @State private var selectedTab: ProjectTab = .overview
-    @State private var isExporting = false
-    @State private var exportError: String? = nil
-    @State private var showExportError = false
+    @State private var showExportSheet = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -43,21 +41,14 @@ struct ProjectView: View {
                 }
                 Spacer()
 
-                if isExporting {
-                    ProgressView()
-                        .progressViewStyle(.circular)
-                        .controlSize(.small)
-                        .padding(.trailing, 8)
-                }
-
                 Button {
-                    exportProject()
+                    showExportSheet = true
                 } label: {
-                    Label("Export", systemImage: "arrow.up.doc")
+                    Label("Export\u{2026}", systemImage: "arrow.up.doc")
                 }
                 .buttonStyle(.borderedProminent)
                 .controlSize(.small)
-                .disabled(isExporting)
+                .keyboardShortcut("e", modifiers: [.command, .shift])
                 .padding(.trailing, 8)
             }
             .padding(.horizontal, 12)
@@ -86,29 +77,8 @@ struct ProjectView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .alert("Export Failed", isPresented: $showExportError) {
-            Button("OK", role: .cancel) {}
-        } message: {
-            Text(exportError ?? "Unknown error")
-        }
-    }
-
-    private func exportProject() {
-        isExporting = true
-        Task {
-            do {
-                let url = try state.export()
-                await MainActor.run {
-                    isExporting = false
-                    NSWorkspace.shared.open(url)
-                }
-            } catch {
-                await MainActor.run {
-                    isExporting = false
-                    exportError = error.localizedDescription
-                    showExportError = true
-                }
-            }
+        .sheet(isPresented: $showExportSheet) {
+            ExportSheet(state: state, isPresented: $showExportSheet)
         }
     }
 }

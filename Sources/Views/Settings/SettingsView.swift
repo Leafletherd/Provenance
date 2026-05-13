@@ -2,8 +2,9 @@ import SwiftUI
 import AppKit
 
 struct SettingsView: View {
-    @AppStorage("appearanceMode")    private var appearanceMode    = "system"
-    @AppStorage("trackPasteSources") private var trackPasteSources = true
+    @AppStorage("appearanceMode")      private var appearanceMode      = "system"
+    @AppStorage("trackPasteSources")   private var trackPasteSources   = true
+    @AppStorage("defaultExportFormat") private var defaultExportFormat = "pdf"
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -19,6 +20,23 @@ struct SettingsView: View {
                     Text("Dark").tag("dark")
                 }
                 .pickerStyle(.segmented)
+                .labelsHidden()
+                .frame(width: 216)
+            }
+
+            Divider().padding(.top, Brand.spaceLG)
+
+            // MARK: Export
+            settingSection(
+                title: "Export",
+                description: "Pre-selects this format when you open the Export sheet. Can be changed per-export."
+            ) {
+                Picker("", selection: $defaultExportFormat) {
+                    ForEach(ExportFormat.allCases, id: \.rawValue) { fmt in
+                        Text(fmt.label).tag(fmt.rawValue)
+                    }
+                }
+                .pickerStyle(.menu)
                 .labelsHidden()
                 .frame(width: 216)
             }

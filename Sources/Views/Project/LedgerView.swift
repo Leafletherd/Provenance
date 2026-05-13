@@ -136,6 +136,7 @@ struct LedgerEventRowView: View {
         case .nestedRepoDetected:  return Brand.statusStuck
         case .seedPromoted:        return Brand.textBrand   // tan-600 — garden/seed themed
         case .paste:               return Color(hex: "7C6F9F")  // muted violet — provenance/origin
+        case .bundleExported:      return Brand.accent
         case .error:               return Color.red
         }
     }
