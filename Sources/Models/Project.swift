@@ -19,6 +19,10 @@ struct Project: Identifiable, Codable, Hashable {
     var exportURL: URL     { ledgerURL.appendingPathComponent("export") }
     /// Structured metadata side-files for ledger events, keyed by event UUID.
     var metadataURL: URL   { ledgerURL.appendingPathComponent("metadata") }
+    /// manuscripts.json — maps relative path → target word count (user-set goals).
+    var manuscriptsJSONURL: URL  { ledgerURL.appendingPathComponent("manuscripts.json") }
+    /// Directory containing per-file sparkline history JSON files.
+    var manuscriptHistoryURL: URL { ledgerURL.appendingPathComponent("manuscripts") }
     var ledgerMDURL: URL   { ledgerURL.appendingPathComponent("ledger.md") }
     var checkinsMDURL: URL { ledgerURL.appendingPathComponent("checkins.md") }
     var sourcesMDURL: URL  { ledgerURL.appendingPathComponent("sources.md") }

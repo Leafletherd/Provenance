@@ -11,6 +11,8 @@ struct OverviewView: View {
     @State private var intent: String = ""
     @State private var showContextSheet = false
     @State private var nameDebounceTask: Task<Void, Never>? = nil
+    @State private var targetEditManuscript: Manuscript? = nil
+    @State private var targetInputText: String = ""
 
     private let displayFmt: DateFormatter = {
         let fmt = DateFormatter()
@@ -173,11 +175,69 @@ struct OverviewView: View {
                             .foregroundColor(.secondary)
                     }
                 }
+
+                Divider()
+
+                // Manuscripts section
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack {
+                        Text("Manuscripts")
+                            .font(.headline)
+                        Spacer()
+                        Button {
+                            state.scanManuscripts()
+                        } label: {
+                            Label("Refresh", systemImage: "arrow.clockwise")
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                    }
+
+                    if state.manuscripts.isEmpty {
+                        EmptyStateView(message: "No text manuscripts found yet.")
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 80)
+                    } else {
+                        ScrollView(.vertical, showsIndicators: true) {
+                            LazyVStack(spacing: 6) {
+                                ForEach(state.manuscripts) { ms in
+                                    ManuscriptCard(manuscript: ms) { action in
+                                        switch action {
+                                        case .setTarget:
+                                            targetInputText = ms.targetWordCount.map(String.init) ?? ""
+                                            targetEditManuscript = ms
+                                        case .clearTarget:
+                                            state.setManuscriptTarget(nil, for: ms.id)
+                                        case .revealInFinder:
+                                            NSWorkspace.shared.activateFileViewerSelecting([ms.path])
+                                        case .openInApp:
+                                            NSWorkspace.shared.open(ms.path)
+                                        }
+                                    }
+                                }
+                            }
+                            .padding(.vertical, 2)
+                        }
+                        .frame(maxHeight: 280)
+                    }
+                }
             }
             .padding(24)
         }
         .onAppear {
             projectName = state.project.name
+        }
+        .sheet(item: $targetEditManuscript) { ms in
+            SetTargetSheet(
+                title: ms.title,
+                current: ms.targetWordCount,
+                inputText: $targetInputText
+            ) { newTarget in
+                state.setManuscriptTarget(newTarget, for: ms.id)
+                targetEditManuscript = nil
+            } onCancel: {
+                targetEditManuscript = nil
+            }
         }
         .sheet(isPresented: $showContextSheet) {
             ContextSheetView(
@@ -288,5 +348,207 @@ struct ContextSheetView: View {
         }
         .padding(24)
         .frame(width: 420)
+    }
+}
+
+// MARK: - Manuscript card
+
+enum ManuscriptCardAction {
+    case setTarget, clearTarget, revealInFinder, openInApp
+}
+
+struct ManuscriptCard: View {
+    let manuscript: Manuscript
+    let onAction: (ManuscriptCardAction) -> Void
+
+    private let relFmt: RelativeDateTimeFormatter = {
+        let f = RelativeDateTimeFormatter()
+        f.unitsStyle = .abbreviated
+        return f
+    }()
+
+    private var wordCountLabel: String {
+        guard let wc = manuscript.wordCount else { return "Word count unavailable" }
+        return "\(wc.formatted()) words"
+    }
+
+    private var pageCountLabel: String? {
+        guard let pc = manuscript.pageCount else { return nil }
+        return "\(pc) pages"
+    }
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 12) {
+            // Left column: metadata
+            VStack(alignment: .leading, spacing: 3) {
+                Text(manuscript.title)
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundColor(Brand.textPrimary)
+                    .lineLimit(1)
+                HStack(spacing: 5) {
+                    TypeBadge(label: manuscript.kind.displayName, color: Brand.textMuted)
+                    Text(relFmt.localizedString(for: manuscript.lastModified, relativeTo: Date()))
+                        .font(.system(size: 10))
+                        .foregroundColor(Brand.textMuted)
+                }
+            }
+
+            Spacer()
+
+            // Right column: counts + sparkline + progress
+            VStack(alignment: .trailing, spacing: 4) {
+                // Counts
+                HStack(spacing: 6) {
+                    if let pg = pageCountLabel {
+                        Text(pg)
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundColor(Brand.textSecondary)
+                    }
+                    Text(wordCountLabel)
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(manuscript.wordCount != nil ? Brand.textPrimary : Brand.textMuted)
+                }
+
+                // Sparkline (only when we have ≥2 history points)
+                if manuscript.history.count >= 2 {
+                    SparklineView(values: manuscript.history.map { $0.wordCount })
+                }
+
+                // Target progress bar
+                if let target = manuscript.targetWordCount, let wc = manuscript.wordCount, target > 0 {
+                    let pct = min(Double(wc) / Double(target), 1.0)
+                    HStack(spacing: 5) {
+                        GeometryReader { geo in
+                            ZStack(alignment: .leading) {
+                                RoundedRectangle(cornerRadius: 2)
+                                    .fill(Brand.surfaceSunken)
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 2)
+                                            .stroke(Brand.border, lineWidth: 0.5)
+                                    )
+                                RoundedRectangle(cornerRadius: 2)
+                                    .fill(Brand.accent)
+                                    .frame(width: geo.size.width * pct)
+                            }
+                        }
+                        .frame(width: 60, height: 5)
+                        Text("\(Int(pct * 100))%")
+                            .font(.system(size: 9, weight: .semibold))
+                            .foregroundColor(Brand.textMuted)
+                    }
+                }
+            }
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .background(Brand.surfaceSunken)
+        .overlay(
+            RoundedRectangle(cornerRadius: Brand.radiusMd)
+                .stroke(Brand.border, lineWidth: 0.5)
+        )
+        .cornerRadius(Brand.radiusMd)
+        .contextMenu {
+            Button("Set Target Word Count\u{2026}") { onAction(.setTarget) }
+            if manuscript.targetWordCount != nil {
+                Button("Clear Target") { onAction(.clearTarget) }
+            }
+            Divider()
+            Button("Reveal in Finder") { onAction(.revealInFinder) }
+            Button("Open in Default App") { onAction(.openInApp) }
+        }
+    }
+}
+
+// MARK: - Sparkline
+
+struct SparklineView: View {
+    let values: [Int]
+
+    var body: some View {
+        Canvas { context, size in
+            guard values.count >= 2 else { return }
+            let minV = values.min() ?? 0
+            let maxV = values.max() ?? 1
+            let range = max(Double(maxV - minV), 1.0)
+            let count = values.count
+
+            var path = Path()
+            for (i, v) in values.enumerated() {
+                let x = CGFloat(i) / CGFloat(count - 1) * size.width
+                let y = size.height - CGFloat(Double(v - minV) / range) * size.height
+                if i == 0 {
+                    path.move(to: CGPoint(x: x, y: y))
+                } else {
+                    path.addLine(to: CGPoint(x: x, y: y))
+                }
+            }
+            context.stroke(path, with: .color(Brand.accent), style: StrokeStyle(lineWidth: 1.5, lineCap: .round, lineJoin: .round))
+        }
+        .frame(width: 60, height: 28)
+    }
+}
+
+// MARK: - Set target sheet
+
+struct SetTargetSheet: View {
+    let title: String
+    let current: Int?
+    @Binding var inputText: String
+    let onSave: (Int?) -> Void
+    let onCancel: () -> Void
+
+    @FocusState private var fieldFocused: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Set Target Word Count")
+                .font(.headline)
+            Text(title)
+                .font(.subheadline)
+                .foregroundColor(Brand.textMuted)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Target (words)")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                TextField("e.g. 80000", text: $inputText)
+                    .textFieldStyle(.roundedBorder)
+                    .focused($fieldFocused)
+                    .onSubmit { save() }
+            }
+
+            if let c = current {
+                Text("Current target: \(c.formatted()) words")
+                    .font(.caption)
+                    .foregroundColor(Brand.textMuted)
+            }
+
+            HStack {
+                if current != nil {
+                    Button("Clear Target") { onSave(nil) }
+                        .buttonStyle(.bordered)
+                        .foregroundColor(Brand.statusStuck)
+                }
+                Spacer()
+                Button("Cancel", action: onCancel)
+                    .buttonStyle(.bordered)
+                Button("Set Target", action: save)
+                    .buttonStyle(.borderedProminent)
+                    .tint(Brand.accent)
+                    .disabled(parsedTarget == nil)
+            }
+        }
+        .padding(24)
+        .frame(width: 380)
+        .onAppear { fieldFocused = true }
+    }
+
+    private var parsedTarget: Int? {
+        let trimmed = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
+        return Int(trimmed).flatMap { $0 > 0 ? $0 : nil }
+    }
+
+    private func save() {
+        onSave(parsedTarget)
     }
 }

@@ -415,6 +415,64 @@ struct LedgerWriter {
         return count
     }
 
+    // MARK: - Manuscript persistence
+
+    /// Loads the per-project target word counts from .ledger/manuscripts.json.
+    /// Returns an empty dictionary if the file doesn't exist yet.
+    static func readManuscriptTargets(from project: Project) -> [String: Int] {
+        guard let data = try? Data(contentsOf: project.manuscriptsJSONURL) else { return [:] }
+        return (try? JSONDecoder().decode([String: Int].self, from: data)) ?? [:]
+    }
+
+    /// Writes the full targets dictionary atomically.
+    static func writeManuscriptTargets(_ targets: [String: Int], to project: Project) {
+        guard let data = try? JSONEncoder().encode(targets) else { return }
+        try? data.write(to: project.manuscriptsJSONURL, options: .atomic)
+    }
+
+    /// Loads the sparkline history for one file (identified by its safeID).
+    static func readManuscriptHistory(safeID: String, from project: Project) -> [Manuscript.HistoryPoint] {
+        let url = project.manuscriptHistoryURL.appendingPathComponent("\(safeID).history.json")
+        guard let data = try? Data(contentsOf: url) else { return [] }
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        return (try? decoder.decode([Manuscript.HistoryPoint].self, from: data)) ?? []
+    }
+
+    /// Appends one history data point, capping at 365 entries using monthly decimation for older data.
+    static func appendManuscriptHistoryPoint(_ point: Manuscript.HistoryPoint,
+                                              safeID: String, to project: Project) {
+        let fm = FileManager.default
+        try? fm.createDirectory(at: project.manuscriptHistoryURL, withIntermediateDirectories: true)
+        let url = project.manuscriptHistoryURL.appendingPathComponent("\(safeID).history.json")
+
+        var history = readManuscriptHistory(safeID: safeID, from: project)
+        history.append(point)
+
+        // Decimate if over 365 entries: keep all entries from the last 365 days;
+        // for older entries, keep only the last one per calendar month.
+        if history.count > 365 {
+            let cutoff = Calendar.current.date(byAdding: .year, value: -1, to: Date()) ?? Date.distantPast
+            let recent = history.filter { $0.date >= cutoff }
+            let older  = history.filter { $0.date < cutoff }
+
+            var monthBuckets: [String: Manuscript.HistoryPoint] = [:]
+            let cal = Calendar.current
+            for entry in older {
+                let comps = cal.dateComponents([.year, .month], from: entry.date)
+                let key = "\(comps.year ?? 0)-\(comps.month ?? 0)"
+                monthBuckets[key] = entry   // last entry in month wins
+            }
+            history = monthBuckets.values.sorted { $0.date < $1.date } + recent
+        }
+
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        if let data = try? encoder.encode(history) {
+            try? data.write(to: url, options: .atomic)
+        }
+    }
+
     static func checkPathMoved(project: Project) -> URL? {
         guard let data = try? Data(contentsOf: project.manifestURL) else { return nil }
         let decoder = JSONDecoder()

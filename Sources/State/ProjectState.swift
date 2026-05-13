@@ -9,6 +9,7 @@ class ProjectState: ObservableObject, Identifiable {
     @Published var artifacts: [Artifact] = []
     @Published var snapshots: [Snapshot] = []
     @Published var events: [LedgerEvent] = []
+    @Published var manuscripts: [Manuscript] = []
     @Published var isWatching: Bool = false
     @Published var pendingFilesChanged: Bool = false
 
@@ -34,13 +35,15 @@ class ProjectState: ObservableObject, Identifiable {
         sources = LedgerWriter.readSources(from: project)
         artifacts = LedgerWriter.readArtifacts(from: project)
         events = LedgerWriter.readEvents(from: project)
-        // git log is a shell process — run off main thread
+        // git log + manuscript scan are shell/disk-intensive — run off main thread
         let proj = project
         Task.detached(priority: .background) { [weak self] in
             let snaps = (try? GitService.log(project: proj)) ?? []
+            let mss   = ManuscriptScanner.scan(project: proj)
             await MainActor.run { [weak self] in
                 guard let self else { return }
                 self.snapshots = snaps
+                self.manuscripts = mss
             }
         }
     }
@@ -109,6 +112,11 @@ class ProjectState: ObservableObject, Identifiable {
             // a nested repo may have arrived. Refresh excludes immediately off main.
             if url.path.contains("/.git/") && !url.path.contains("/.ledger/") {
                 refreshNestedExcludes()
+            }
+
+            // Manuscript files: rescan the single file so the Overview count stays fresh.
+            if ManuscriptScanner.supportedExtensions.contains(ext) {
+                rescanManuscript(at: url)
             }
         }
 
@@ -239,6 +247,9 @@ class ProjectState: ObservableObject, Identifiable {
                         self.matchAndEmitPastes(changedURLs: changedURLs, snapshotHash: hash, project: proj)
                         self.reloadEvents()
                     }
+                    // Append manuscript history points for any changed manuscript files.
+                    // Called from within a Task.detached block so `self` capture is explicit.
+                    self?.appendManuscriptHistoryBackground(changedURLs: changedURLs, project: proj)
                 }
             } catch {
                 LedgerWriter.appendEvent(type: .error,
@@ -411,6 +422,74 @@ class ProjectState: ObservableObject, Identifiable {
             snapshots: snapshots,
             events: events
         )
+    }
+
+    // MARK: - Manuscripts
+
+    /// Full async rescan of all manuscript files in the project.
+    func scanManuscripts() {
+        let proj = project
+        Task.detached(priority: .background) { [weak self] in
+            let mss = ManuscriptScanner.scan(project: proj)
+            await MainActor.run { [weak self] in
+                self?.manuscripts = mss
+            }
+        }
+    }
+
+    /// Rescan a single file and update its entry in the manuscripts array.
+    func rescanManuscript(at url: URL) {
+        let proj = project
+        let existing = manuscripts.first(where: { $0.path == url })
+        Task.detached(priority: .utility) { [weak self] in
+            guard let updated = ManuscriptScanner.rescan(url: url, existing: existing, project: proj)
+            else {
+                // File gone — remove from list.
+                await MainActor.run { [weak self] in
+                    self?.manuscripts.removeAll { $0.path == url }
+                }
+                return
+            }
+            await MainActor.run { [weak self] in
+                guard let self else { return }
+                if let idx = self.manuscripts.firstIndex(where: { $0.id == updated.id }) {
+                    self.manuscripts[idx] = updated
+                } else {
+                    self.manuscripts.append(updated)
+                    self.manuscripts.sort {
+                        $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending
+                    }
+                }
+            }
+        }
+    }
+
+    /// Persists a target word count for a manuscript and updates the in-memory array.
+    func setManuscriptTarget(_ target: Int?, for id: String) {
+        var targets = LedgerWriter.readManuscriptTargets(from: project)
+        if let t = target {
+            targets[id] = t
+        } else {
+            targets.removeValue(forKey: id)
+        }
+        LedgerWriter.writeManuscriptTargets(targets, to: project)
+        // Update in-memory
+        if let idx = manuscripts.firstIndex(where: { $0.id == id }) {
+            var ms = manuscripts[idx]
+            ms.targetWordCount = target
+            manuscripts[idx] = ms
+        }
+    }
+
+    /// Appends a history data point for each changed URL that is a manuscript file.
+    /// Called off the main actor after each auto-snapshot commit.
+    private nonisolated func appendManuscriptHistoryBackground(changedURLs: [URL], project: Project) {
+        for url in changedURLs {
+            let ext = url.pathExtension.lowercased()
+            guard ManuscriptScanner.supportedExtensions.contains(ext) else { continue }
+            guard !url.path.contains("/.ledger/") else { continue }
+            ManuscriptScanner.appendHistory(url: url, project: project)
+        }
     }
 
     // MARK: - Paste matching
