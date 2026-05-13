@@ -36,6 +36,7 @@ struct LedgerWriter {
         try fm.createDirectory(at: project.snapshotsURL, withIntermediateDirectories: true)
         try fm.createDirectory(at: project.attachmentsURL, withIntermediateDirectories: true)
         try fm.createDirectory(at: project.exportURL, withIntermediateDirectories: true)
+        try fm.createDirectory(at: project.metadataURL, withIntermediateDirectories: true)
 
         // Write manifest
         let manifest = Manifest(
@@ -65,10 +66,34 @@ struct LedgerWriter {
 
     // MARK: - Event log
 
-    static func appendEvent(type: LedgerEventType, detail: String, to project: Project) {
+    /// Appends a ledger event to ledger.md.
+    /// If `metadata` is provided, a stable UUID is generated, the metadata is written to
+    /// .ledger/metadata/<uuid>.json, and the UUID is embedded in the ledger.md line as
+    /// `<type>+<uuid>` so it can be retrieved on read-back.
+    /// - Returns: The UUID assigned to this event.
+    @discardableResult
+    static func appendEvent(type: LedgerEventType, detail: String,
+                            to project: Project, metadata: Data? = nil) -> UUID {
+        let eventID = UUID()
         let timestamp = formatISO(Date())
-        let line = "[\(timestamp)] \(type.rawValue) — \(detail)\n"
-        guard let data = line.data(using: .utf8) else { return }
+
+        // Write metadata side-file before the ledger line so it's always present
+        // by the time readEvents tries to load it.
+        if let metadata {
+            // Create the directory lazily for projects initialized before this field existed.
+            try? FileManager.default.createDirectory(
+                at: project.metadataURL, withIntermediateDirectories: true)
+            let sideURL = project.metadataURL.appendingPathComponent("\(eventID.uuidString).json")
+            try? metadata.write(to: sideURL, options: .atomic)
+        }
+
+        // ledger.md line: embed UUID only when there is a metadata side-file.
+        let typeField = metadata != nil
+            ? "\(type.rawValue)+\(eventID.uuidString)"
+            : type.rawValue
+        let line = "[\(timestamp)] \(typeField) — \(detail)\n"
+        guard let data = line.data(using: .utf8) else { return eventID }
+
         let url = project.ledgerMDURL
         if let handle = try? FileHandle(forWritingTo: url) {
             handle.seekToEndOfFile()
@@ -77,6 +102,7 @@ struct LedgerWriter {
         } else {
             try? data.write(to: url, options: .atomic)
         }
+        return eventID
     }
 
     static func readEvents(from project: Project) -> [LedgerEvent] {
@@ -84,19 +110,36 @@ struct LedgerWriter {
         let lines = content.split(separator: "\n", omittingEmptySubsequences: true)
         return lines.compactMap { line -> LedgerEvent? in
             let s = String(line)
-            // Format: [2025-04-12T14:32:01Z] event_type — detail
+            // Format: [<timestamp>] <type>[+<uuid>] — <detail>
             guard s.hasPrefix("[") else { return nil }
             guard let closeBracket = s.firstIndex(of: "]") else { return nil }
             let tsString = String(s[s.index(after: s.startIndex)..<closeBracket])
             guard let timestamp = parseISO(tsString) else { return nil }
             let rest = String(s[s.index(after: closeBracket)...]).trimmingCharacters(in: .whitespaces)
-            // rest is "event_type — detail"
             let parts = rest.components(separatedBy: " — ")
             guard parts.count >= 2 else { return nil }
-            let typeRaw = parts[0].trimmingCharacters(in: .whitespaces)
+            let typeField = parts[0].trimmingCharacters(in: .whitespaces)
             let detail = parts[1...].joined(separator: " — ").trimmingCharacters(in: .whitespaces)
-            let eventType = LedgerEventType(rawValue: typeRaw) ?? .error
-            return LedgerEvent(timestamp: timestamp, type: eventType, detail: detail)
+
+            // Split <type>+<uuid> if a UUID suffix is present.
+            var eventID = UUID()
+            var cleanTypeRaw = typeField
+            var metadata: Data? = nil
+            if let plusIdx = typeField.lastIndex(of: "+") {
+                let afterPlus = String(typeField[typeField.index(after: plusIdx)...])
+                if let uuid = UUID(uuidString: afterPlus) {
+                    eventID = uuid
+                    cleanTypeRaw = String(typeField[..<plusIdx])
+                    // Load side-file (gracefully absent for migrated/corrupted entries).
+                    let sideURL = project.metadataURL
+                        .appendingPathComponent("\(uuid.uuidString).json")
+                    metadata = try? Data(contentsOf: sideURL)
+                }
+            }
+
+            let eventType = LedgerEventType(rawValue: cleanTypeRaw) ?? .error
+            return LedgerEvent(id: eventID, timestamp: timestamp,
+                               type: eventType, detail: detail, metadata: metadata)
         }
     }
 

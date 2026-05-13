@@ -3,6 +3,7 @@ import SwiftUI
 struct LedgerView: View {
     @ObservedObject var state: ProjectState
     @State private var selectedFilter: LedgerEventType? = nil
+    @State private var selectedSeedEvent: LedgerEvent? = nil
 
     private let displayFmt: DateFormatter = {
         let fmt = DateFormatter()
@@ -55,6 +56,13 @@ struct LedgerView: View {
                     ForEach(filteredEvents) { event in
                         LedgerEventRowView(event: event, displayFmt: displayFmt)
                             .listRowInsets(EdgeInsets(top: 3, leading: 12, bottom: 3, trailing: 12))
+                            // seedPromoted events with metadata open the timeline sheet.
+                            .contentShape(Rectangle())
+                            .onTapGesture {
+                                if event.type == .seedPromoted && event.metadata != nil {
+                                    selectedSeedEvent = event
+                                }
+                            }
                     }
                 }
                 .listStyle(.inset)
@@ -62,6 +70,9 @@ struct LedgerView: View {
         }
         .onAppear {
             state.reloadEvents()
+        }
+        .sheet(item: $selectedSeedEvent) { event in
+            SeedTimelineView(event: event)
         }
     }
 }
@@ -72,20 +83,27 @@ struct LedgerEventRowView: View {
 
     var eventColor: Color {
         switch event.type {
-        case .projectConnected: return .green
-        case .fileSaved: return .blue
-        case .snapshotAuto: return .blue.opacity(0.7)
-        case .snapshotScheduled: return .orange
-        case .snapshotManual: return .green
-        case .checkin: return .purple
-        case .sourceAdded: return .teal
-        case .artifactAdded: return .indigo
-        case .folderMoved: return .yellow
-        case .projectDisconnected: return .gray
-        case .githubSync: return .mint
-        case .sceneBoardChange: return Brand.accent.opacity(0.85)
-        case .error: return .red
+        case .projectConnected:    return Brand.statusBreakthrough
+        case .fileSaved:           return Brand.textMuted
+        case .snapshotAuto:        return Brand.accent.opacity(0.8)
+        case .snapshotScheduled:   return Brand.statusStuck
+        case .snapshotManual:      return Brand.accent
+        case .checkin:             return Color(hex: "5A6480")  // dusty slate
+        case .sourceAdded:         return Brand.accent
+        case .artifactAdded:       return Color(hex: "5A6480")
+        case .folderMoved:         return Brand.statusStuck
+        case .projectDisconnected: return Brand.textMuted
+        case .githubSync:          return Brand.accent
+        case .sceneBoardChange:    return Brand.accent.opacity(0.85)
+        case .nestedRepoDetected:  return Brand.statusStuck
+        case .seedPromoted:        return Brand.textBrand   // tan-600 — garden/seed themed
+        case .error:               return Color.red
         }
+    }
+
+    /// seedPromoted events with metadata are tappable — show a chevron indicator.
+    private var isTappable: Bool {
+        event.type == .seedPromoted && event.metadata != nil
     }
 
     var body: some View {
@@ -103,15 +121,21 @@ struct LedgerEventRowView: View {
                     Spacer()
                     Text(displayFmt.string(from: event.timestamp))
                         .font(.caption2)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(Brand.textMuted)
+                    if isTappable {
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 9, weight: .semibold))
+                            .foregroundColor(Brand.textMuted)
+                    }
                 }
                 Text(event.detail)
                     .font(.caption)
-                    .foregroundColor(.primary)
+                    .foregroundColor(Brand.textPrimary)
                     .lineLimit(3)
             }
         }
         .padding(.vertical, 2)
+        .opacity(isTappable ? 1 : 1)   // reserved for future dimming
     }
 }
 
@@ -124,10 +148,10 @@ struct FilterButton: View {
         Button(action: action) {
             Text(label)
                 .font(.caption.bold())
-                .foregroundColor(isSelected ? .white : .secondary)
+                .foregroundColor(isSelected ? .white : Brand.textSecondary)
                 .padding(.horizontal, 8)
                 .padding(.vertical, 4)
-                .background(isSelected ? Color.accentColor : Color.secondary.opacity(0.1))
+                .background(isSelected ? Brand.accent : Brand.surfaceSunken)
                 .cornerRadius(5)
         }
         .buttonStyle(.plain)

@@ -19,6 +19,9 @@ class AppState: ObservableObject {
             let state = ProjectState(project: project)
             state.loadData()
             state.startWatching()
+            // Refresh nested-repo excludes on every launch so repos cloned into the
+            // project while Provenance was closed get excluded immediately.
+            state.refreshNestedExcludes()
             projectStates.append(state)
             checkForFolderMove(state: state)
         }

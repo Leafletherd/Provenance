@@ -91,10 +91,23 @@ class ProjectState: ObservableObject, Identifiable {
         pendingFilesChanged = true
         let changedFile = urls.first?.lastPathComponent ?? "unknown"
 
-        // SceneBoard diff: for any .sceneboard file in the changed set,
-        // compare against the cached previous version and log changes immediately.
-        for url in urls where url.pathExtension.lowercased() == "sceneboard" {
-            diffSceneBoard(at: url)
+        for url in urls {
+            let ext = url.pathExtension.lowercased()
+            let name = url.lastPathComponent.lowercased()
+
+            if ext == "sceneboard" {
+                diffSceneBoard(at: url)
+            }
+
+            if name.hasSuffix(".seed-trace.json") {
+                ingestSeedTrace(at: url)
+            }
+
+            // A .git directory appearing (or being written to) inside the project means
+            // a nested repo may have arrived. Refresh excludes immediately off main.
+            if url.path.contains("/.git/") && !url.path.contains("/.ledger/") {
+                refreshNestedExcludes()
+            }
         }
 
         let workItem = DispatchWorkItem { [weak self] in
@@ -111,10 +124,7 @@ class ProjectState: ObservableObject, Identifiable {
         let key = url.path
         defer { sceneBoardCache[key] = newData }
 
-        guard let oldData = sceneBoardCache[key] else {
-            // First time we've seen this file — seed the cache, no diff yet.
-            return
-        }
+        guard let oldData = sceneBoardCache[key] else { return }
 
         let changes = SceneBoardDiffService.diff(old: oldData, new: newData)
         guard !changes.isEmpty else { return }
@@ -122,13 +132,70 @@ class ProjectState: ObservableObject, Identifiable {
         let proj = project
         let filename = url.lastPathComponent
         for change in changes {
+            // JSON-encode the structured change as the event's metadata side-file.
+            let metadata = try? JSONEncoder().encode(change)
             LedgerWriter.appendEvent(
                 type: .sceneBoardChange,
                 detail: "\(filename): \(change.description)",
-                to: proj
+                to: proj,
+                metadata: metadata
             )
         }
         reloadEvents()
+    }
+
+    // MARK: - Seed-trace ingestion
+
+    private func ingestSeedTrace(at url: URL) {
+        let proj = project
+        Task.detached(priority: .userInitiated) { [weak self] in
+            let result = SeedTraceIngestor.ingest(fileURL: url, project: proj)
+            await MainActor.run { [weak self] in
+                guard let self else { return }
+                if let err = result.parseError {
+                    LedgerWriter.appendEvent(type: .error,
+                        detail: "seed-trace parse error: \(err)", to: proj)
+                    self.reloadEvents()
+                    return
+                }
+                for (detail, metadata) in result.events {
+                    LedgerWriter.appendEvent(
+                        type: .seedPromoted, detail: detail,
+                        to: proj, metadata: metadata)
+                }
+                for artifact in result.artifacts {
+                    self.artifacts.append(artifact)
+                }
+                if !result.artifacts.isEmpty {
+                    try? LedgerWriter.writeArtifacts(self.artifacts, to: proj)
+                }
+                if !result.events.isEmpty || !result.artifacts.isEmpty {
+                    self.reloadEvents()
+                    self.updateLastActivity()
+                }
+            }
+        }
+    }
+
+    // MARK: - Nested repo exclusion
+
+    func refreshNestedExcludes() {
+        let proj = project
+        Task.detached(priority: .background) { [weak self] in
+            let newPaths = GitService.refreshNestedExcludes(project: proj)
+            guard !newPaths.isEmpty else { return }
+            await MainActor.run { [weak self] in
+                guard let self else { return }
+                for relPath in newPaths {
+                    LedgerWriter.appendEvent(
+                        type: .nestedRepoDetected,
+                        detail: "Found nested repo at \(relPath)",
+                        to: proj
+                    )
+                }
+                self.reloadEvents()
+            }
+        }
     }
 
     // Seed the SceneBoard cache for all .sceneboard files currently in the

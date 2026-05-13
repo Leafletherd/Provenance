@@ -23,6 +23,75 @@ struct GitService {
                    "GIT_COMMITTER_NAME": "Provenance",
                    "GIT_COMMITTER_EMAIL": "provenance@local"]
         _ = try? runWithEnv(["commit", "--allow-empty", "-m", "init: project connected"], env: env)
+
+        // Exclude any nested repos already present at connect time.
+        _ = refreshNestedExcludes(project: project)
+    }
+
+    // MARK: - Nested repo exclusion
+
+    /// Walks the project folder for `.git` directories other than the ledger's own git.
+    /// Appends a gitignore-style exclude rule to `.ledger/snapshots/.git/info/exclude`
+    /// for each new nested repo and each submodule worktree listed in `.gitmodules`.
+    ///
+    /// - Returns: Newly-found relative paths (e.g. `"Seeds/.git"`) so callers can emit
+    ///   `nestedRepoDetected` ledger events.
+    @discardableResult
+    static func refreshNestedExcludes(project: Project) -> [String] {
+        let fm = FileManager.default
+        let excludesURL = project.snapshotsURL
+            .appendingPathComponent(".git/info/exclude")
+        guard fm.fileExists(atPath: excludesURL.path) else { return [] }
+
+        var existing = (try? String(contentsOf: excludesURL, encoding: .utf8)) ?? ""
+        var newRelPaths: [String] = []
+
+        // Walk the whole project tree, including hidden dirs, to find .git dirs.
+        let enumerator = fm.enumerator(
+            at: project.folderURL,
+            includingPropertiesForKeys: [.isDirectoryKey],
+            options: []
+        )
+        while let url = enumerator?.nextObject() as? URL {
+            let isDir = (try? url.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true
+            // Don't descend into our own .ledger.
+            if url.lastPathComponent == ".ledger" && isDir {
+                enumerator?.skipDescendants(); continue
+            }
+            // Found a nested .git directory — don't descend into it.
+            if url.lastPathComponent == ".git" && isDir {
+                enumerator?.skipDescendants()
+                let rel = url.path
+                    .replacingOccurrences(of: project.folderURL.path + "/", with: "")
+                let pattern = "/\(rel)/"
+                if !existing.contains(pattern) {
+                    existing += "\(pattern)\n"
+                    newRelPaths.append(rel)
+                }
+            }
+        }
+
+        // Exclude submodule worktrees listed in .gitmodules at the project root.
+        let gitmodulesURL = project.folderURL.appendingPathComponent(".gitmodules")
+        if let gmContent = try? String(contentsOf: gitmodulesURL, encoding: .utf8) {
+            for rawLine in gmContent.components(separatedBy: "\n") {
+                let trimmed = rawLine.trimmingCharacters(in: .whitespaces)
+                guard trimmed.hasPrefix("path = ") else { continue }
+                let subPath = String(trimmed.dropFirst(7)).trimmingCharacters(in: .whitespaces)
+                let pattern = "/\(subPath)/"
+                if !existing.contains(pattern) {
+                    existing += "\(pattern)\n"
+                    if !newRelPaths.contains(where: { $0.hasPrefix(subPath) }) {
+                        newRelPaths.append(subPath)
+                    }
+                }
+            }
+        }
+
+        if !newRelPaths.isEmpty {
+            try? existing.write(to: excludesURL, atomically: true, encoding: .utf8)
+        }
+        return newRelPaths
     }
 
     @discardableResult
