@@ -91,6 +91,55 @@ struct OverviewView: View {
 
                 Divider()
 
+                // Paste tracking override
+                VStack(alignment: .leading, spacing: 6) {
+                    let globalOn = UserDefaults.standard.object(forKey: "trackPasteSources") as? Bool ?? true
+                    let effectiveOn = state.project.trackPasteSources ?? globalOn
+
+                    HStack(alignment: .top, spacing: 10) {
+                        Toggle("", isOn: Binding(
+                            get: { state.project.trackPasteSources ?? globalOn },
+                            set: { newValue in
+                                var updated = state.project
+                                // If the user is toggling back to the global default, clear the override.
+                                updated.trackPasteSources = (newValue == globalOn) ? nil : newValue
+                                state.updateProject(updated)
+                                appState.updateProject(updated)
+                            }
+                        ))
+                        .toggleStyle(.switch)
+                        .controlSize(.small)
+                        .labelsHidden()
+
+                        VStack(alignment: .leading, spacing: 2) {
+                            HStack(spacing: 6) {
+                                Text("Track paste sources")
+                                    .font(.callout)
+                                if state.project.trackPasteSources == nil {
+                                    Text("global default")
+                                        .font(.caption2)
+                                        .foregroundColor(Brand.textMuted)
+                                        .padding(.horizontal, 5)
+                                        .padding(.vertical, 2)
+                                        .background(Brand.surfaceSunken)
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 3)
+                                                .stroke(Brand.border, lineWidth: 0.5)
+                                        )
+                                        .cornerRadius(3)
+                                }
+                            }
+                            Text(effectiveOn
+                                 ? "Provenance will record where pasted text came from in this project."
+                                 : "Paste-source recording is disabled for this project.")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                }
+
+                Divider()
+
                 // Editable context fields
                 VStack(alignment: .leading, spacing: 12) {
                     HStack {

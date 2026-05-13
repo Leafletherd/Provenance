@@ -26,6 +26,12 @@ class AppState: ObservableObject {
             checkForFolderMove(state: state)
         }
         selectedProjectID = projectStates.first?.project.id
+
+        // Start the global pasteboard observer if paste tracking is globally enabled.
+        let globalTracking = UserDefaults.standard.object(forKey: "trackPasteSources") as? Bool ?? true
+        if globalTracking {
+            PasteboardObserver.shared.start()
+        }
     }
 
     // MARK: - Connect Project

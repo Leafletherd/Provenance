@@ -9,6 +9,9 @@ struct Project: Identifiable, Codable, Hashable {
     var medium: String?
     var workingDescription: String?
     var intent: String?
+    /// Per-project paste-tracking override. `nil` defers to the global "Track paste sources"
+    /// setting in Settings → Privacy. `true`/`false` forces tracking on/off for this project.
+    var trackPasteSources: Bool?
 
     var ledgerURL: URL      { folderURL.appendingPathComponent(".ledger") }
     var snapshotsURL: URL  { ledgerURL.appendingPathComponent("snapshots") }

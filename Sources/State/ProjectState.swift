@@ -90,6 +90,8 @@ class ProjectState: ObservableObject, Identifiable {
         debounceWorkItem?.cancel()
         pendingFilesChanged = true
         let changedFile = urls.first?.lastPathComponent ?? "unknown"
+        // Capture all changed URLs so paste-matching can compute relative paths.
+        let changedURLs = urls
 
         for url in urls {
             let ext = url.pathExtension.lowercased()
@@ -111,7 +113,7 @@ class ProjectState: ObservableObject, Identifiable {
         }
 
         let workItem = DispatchWorkItem { [weak self] in
-            Task { @MainActor in self?.takeAutoSnapshot(changedFile: changedFile) }
+            Task { @MainActor in self?.takeAutoSnapshot(changedFile: changedFile, changedURLs: changedURLs) }
         }
         debounceWorkItem = workItem
         DispatchQueue.main.asyncAfter(deadline: .now() + 2.0, execute: workItem)
@@ -217,7 +219,7 @@ class ProjectState: ObservableObject, Identifiable {
 
     // MARK: - Snapshots
 
-    func takeAutoSnapshot(changedFile: String) {
+    func takeAutoSnapshot(changedFile: String, changedURLs: [URL] = []) {
         let fmt = DateFormatter()
         fmt.dateFormat = "yyyy-MM-dd HH:mm:ss"
         let message = "auto: file saved \(changedFile) \(fmt.string(from: Date()))"
@@ -233,6 +235,8 @@ class ProjectState: ObservableObject, Identifiable {
                         self.pendingFilesChanged = false
                         self.snapshots = snaps
                         self.updateLastActivity()
+                        // Paste matching runs on main actor after the commit is confirmed.
+                        self.matchAndEmitPastes(changedURLs: changedURLs, snapshotHash: hash, project: proj)
                         self.reloadEvents()
                     }
                 }
@@ -407,6 +411,84 @@ class ProjectState: ObservableObject, Identifiable {
             snapshots: snapshots,
             events: events
         )
+    }
+
+    // MARK: - Paste matching
+
+    /// Whether paste-source tracking is active for this project.
+    /// Project-level override (nil = defer to global setting; default global = true).
+    var isPasteTrackingEnabled: Bool {
+        if let override = project.trackPasteSources { return override }
+        return UserDefaults.standard.object(forKey: "trackPasteSources") as? Bool ?? true
+    }
+
+    /// Called on the main actor after each auto-snapshot commit.
+    /// Checks recent pasteboard events against added content in the changed files and
+    /// emits `.paste` ledger events for any matches found.
+    /// No disk I/O beyond ledger writes — file content is fetched via `git show`.
+    private func matchAndEmitPastes(changedURLs: [URL], snapshotHash: String, project: Project) {
+        guard isPasteTrackingEnabled else { return }
+
+        // Only text-like files are worth scanning.
+        let textExtensions: Set<String> = [
+            "txt", "md", "fountain", "fdx", "rtf", "markdown",
+            "swift", "js", "ts", "py", "rb", "go", "rs", "java",
+            "c", "cpp", "h", "css", "html", "json", "yaml", "yml",
+            "xml", "sh", "bat", "csv", "tex",
+        ]
+
+        let recentPastes = PasteboardObserver.shared.recentEvents(within: 300)
+        // Only pastes with a preview long enough to avoid false positives.
+        let candidates = recentPastes.filter { $0.contentPreview.count >= 20 }
+        guard !candidates.isEmpty else { return }
+
+        let projectRoot = project.folderURL.path
+
+        for url in changedURLs {
+            let ext = url.pathExtension.lowercased()
+            guard textExtensions.contains(ext) || ext.isEmpty else { continue }
+            guard url.path.hasPrefix(projectRoot) else { continue }
+
+            // Compute the path relative to the project root for git show.
+            var relativePath = String(url.path.dropFirst(projectRoot.count))
+            if relativePath.hasPrefix("/") { relativePath = String(relativePath.dropFirst()) }
+            guard !relativePath.isEmpty, !relativePath.hasPrefix(".ledger/") else { continue }
+
+            // Fetch content at current and previous commits (background-safe — pure shell).
+            let currentContent  = GitService.fileContent(hash: snapshotHash,
+                                                          relativePath: relativePath, project: project) ?? ""
+            let previousContent = GitService.fileContentPrevious(hash: snapshotHash,
+                                                                   relativePath: relativePath, project: project) ?? ""
+
+            for paste in candidates {
+                let preview = paste.contentPreview
+                // The preview must appear in the current content but not in the previous version.
+                guard currentContent.contains(preview),
+                      !previousContent.contains(preview) else { continue }
+
+                // Build the metadata side-file.
+                let meta = PasteMetadata(
+                    contentPreview: preview,
+                    contentLength: paste.contentLength,
+                    kind: paste.kind.rawValue,
+                    sourceURL: paste.sourceURL,
+                    sourceBundleID: paste.sourceBundleID,
+                    isAI: paste.isAI,
+                    matchedFile: relativePath,
+                    snapshotHash: snapshotHash
+                )
+                let metaData = try? JSONEncoder().encode(meta)
+
+                // Build a human-readable detail line.
+                var source = paste.sourceBundleID ?? "unknown source"
+                if let url = paste.sourceURL { source = url.host ?? source }
+                let aiTag = paste.isAI ? " [AI]" : ""
+                let detail = "Paste from \(source)\(aiTag) in \(url.lastPathComponent) " +
+                             "(\(paste.contentLength) chars) — \"\(String(preview.prefix(40)))\u{2026}\""
+
+                LedgerWriter.appendEvent(type: .paste, detail: detail, to: project, metadata: metaData)
+            }
+        }
     }
 
     // MARK: - Private

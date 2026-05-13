@@ -2,7 +2,8 @@ import SwiftUI
 import AppKit
 
 struct SettingsView: View {
-    @AppStorage("appearanceMode") private var appearanceMode = "system"
+    @AppStorage("appearanceMode")    private var appearanceMode    = "system"
+    @AppStorage("trackPasteSources") private var trackPasteSources = true
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -24,6 +25,18 @@ struct SettingsView: View {
 
             Divider().padding(.top, Brand.spaceLG)
 
+            // MARK: Privacy
+            settingSection(
+                title: "Privacy",
+                description: "When enabled, Provenance silently monitors the clipboard and records where pasted text came from — source URL, app, or AI tool. No content is stored: only a 64-character preview and a SHA-256 hash. Per-project overrides are available in each project's Overview tab."
+            ) {
+                Toggle("Track paste sources", isOn: $trackPasteSources)
+                    .toggleStyle(.switch)
+                    .controlSize(.small)
+            }
+
+            Divider().padding(.top, Brand.spaceLG)
+
             // Done button
             HStack {
                 Spacer()
@@ -41,6 +54,13 @@ struct SettingsView: View {
         .frame(width: 400)
         .onChange(of: appearanceMode) { mode in
             applyAppearance(mode)
+        }
+        .onChange(of: trackPasteSources) { enabled in
+            if enabled {
+                PasteboardObserver.shared.start()
+            } else {
+                PasteboardObserver.shared.stop()
+            }
         }
         .onAppear {
             applyAppearance(appearanceMode)
