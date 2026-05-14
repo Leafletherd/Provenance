@@ -386,6 +386,44 @@ struct ExportService {
         return md
     }
 
+    // MARK: - Authorship Report export
+
+    /// Delegates to `AuthorshipReportRenderer`.
+    static func exportAuthorshipReport(
+        project: Project,
+        authorName: String,
+        checkIns: [CheckIn],
+        sources: [Source],
+        artifacts: [Artifact],
+        manuscripts: [Manuscript],
+        events: [LedgerEvent],
+        integrityStatus: LedgerIntegrity.IntegrityStatus,
+        chain: LedgerChain?
+    ) throws -> URL {
+        let fm = FileManager.default
+        try fm.createDirectory(at: project.exportURL, withIntermediateDirectories: true)
+
+        let dateStr = DateFormatter.localizedString(from: Date(), dateStyle: .short, timeStyle: .none)
+            .replacingOccurrences(of: "/", with: "-")
+        let filename = "\(project.name)-authorship-\(dateStr).pdf"
+            .replacingOccurrences(of: " ", with: "_")
+        let outputURL = project.exportURL.appendingPathComponent(filename)
+
+        try AuthorshipReportRenderer.render(
+            to: outputURL,
+            project: project,
+            authorName: authorName,
+            checkIns: checkIns,
+            sources: sources,
+            artifacts: artifacts,
+            manuscripts: manuscripts,
+            events: events,
+            integrityStatus: integrityStatus,
+            chain: chain
+        )
+        return outputURL
+    }
+
     // MARK: - PDF export (existing)
 
     static func export(

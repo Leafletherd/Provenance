@@ -18,6 +18,8 @@ enum LedgerEventType: String, Codable, CaseIterable {
     case paste               = "paste"
     case bundleExported      = "bundle_exported"
     case promotedToWorks     = "promoted_to_works"
+    case chainStarted        = "chain_started"
+    case chainReset          = "chain_reset"
     case error               = "error"
 
     var displayName: String {
@@ -39,6 +41,8 @@ enum LedgerEventType: String, Codable, CaseIterable {
         case .paste:               return "Paste Source"
         case .bundleExported:      return "Bundle Exported"
         case .promotedToWorks:     return "Promoted to Works"
+        case .chainStarted:        return "Chain Started"
+        case .chainReset:          return "Chain Reset"
         case .error:               return "Error"
         }
     }

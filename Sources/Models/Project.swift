@@ -27,6 +27,8 @@ struct Project: Identifiable, Codable, Hashable {
     /// Directory containing per-file sparkline history JSON files.
     var manuscriptHistoryURL: URL { ledgerURL.appendingPathComponent("manuscripts") }
     var ledgerMDURL: URL   { ledgerURL.appendingPathComponent("ledger.md") }
+    /// Sidecar holding the integrity chain metadata (SHA256 hash per chained line).
+    var chainURL: URL      { ledgerURL.appendingPathComponent("ledger.chain.json") }
     var checkinsMDURL: URL { ledgerURL.appendingPathComponent("checkins.md") }
     var sourcesMDURL: URL  { ledgerURL.appendingPathComponent("sources.md") }
     var artifactsMDURL: URL { ledgerURL.appendingPathComponent("artifacts.md") }

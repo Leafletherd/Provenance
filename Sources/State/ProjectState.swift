@@ -12,6 +12,7 @@ class ProjectState: ObservableObject, Identifiable {
     @Published var manuscripts: [Manuscript] = []
     @Published var isWatching: Bool = false
     @Published var pendingFilesChanged: Bool = false
+    @Published var integrityStatus: LedgerIntegrity.IntegrityStatus = .checking
 
     nonisolated let id: UUID
 
@@ -44,6 +45,7 @@ class ProjectState: ObservableObject, Identifiable {
                 guard let self else { return }
                 self.snapshots = snaps
                 self.manuscripts = mss
+                self.reloadIntegrity()
             }
         }
     }
@@ -409,6 +411,28 @@ class ProjectState: ObservableObject, Identifiable {
 
     func reloadEvents() {
         events = LedgerWriter.readEvents(from: project)
+    }
+
+    // MARK: - Integrity
+
+    /// Runs migration (idempotent) then verifies both chain and git consistency.
+    /// Must be called from the main actor; work runs on a background task.
+    func reloadIntegrity() {
+        let proj  = project
+        let snaps = snapshots
+        integrityStatus = .checking
+        Task.detached(priority: .background) { [weak self] in
+            // Migrate pre-chain projects on first call.
+            LedgerIntegrity.migrateIfNeeded(project: proj)
+            let chainResult = LedgerIntegrity.verify(project: proj)
+            let gitResult   = LedgerIntegrity.verifyGitConsistency(project: proj, snapshots: snaps)
+            let status      = LedgerIntegrity.combine(chainResult, gitResult, project: proj)
+            await MainActor.run { [weak self] in
+                self?.integrityStatus = status
+                // Reload events so any newly-appended chainStarted event appears.
+                self?.events = LedgerWriter.readEvents(from: proj)
+            }
+        }
     }
 
     // MARK: - Export

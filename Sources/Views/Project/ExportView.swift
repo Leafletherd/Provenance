@@ -4,23 +4,26 @@ import AppKit
 // MARK: - Export format
 
 enum ExportFormat: String, CaseIterable {
-    case pdf      = "pdf"
-    case bundle   = "bundle"
-    case markdown = "markdown"
+    case pdf             = "pdf"
+    case bundle          = "bundle"
+    case markdown        = "markdown"
+    case authorshipReport = "authorship_report"
 
     var label: String {
         switch self {
-        case .pdf:      return "PDF Report"
-        case .bundle:   return "Bundle for Works"
-        case .markdown: return "Markdown"
+        case .pdf:             return "PDF Report"
+        case .bundle:          return "Bundle for Works"
+        case .markdown:        return "Markdown"
+        case .authorshipReport: return "Authorship"
         }
     }
 
     var icon: String {
         switch self {
-        case .pdf:      return "doc.richtext"
-        case .bundle:   return "shippingbox"
-        case .markdown: return "doc.plaintext"
+        case .pdf:             return "doc.richtext"
+        case .bundle:          return "shippingbox"
+        case .markdown:        return "doc.plaintext"
+        case .authorshipReport: return "doc.badge.clock"
         }
     }
 
@@ -33,15 +36,8 @@ enum ExportFormat: String, CaseIterable {
             return "A structured handoff for Works. Writes .provenance.bundle/ at the project root."
         case .markdown:
             return "A single .md file containing the project\u{2019}s metadata, check-ins, sources, and artifact list."
-        }
-    }
-
-    /// Output path hint shown in the post-export confirmation.
-    func destinationHint(projectName: String) -> String {
-        switch self {
-        case .pdf:      return ".ledger/export/\(projectName.replacingOccurrences(of: " ", with: "_"))-provenance-…pdf"
-        case .bundle:   return ".provenance.bundle/"
-        case .markdown: return ".ledger/export/\(projectName.replacingOccurrences(of: " ", with: "_"))-provenance-….md"
+        case .authorshipReport:
+            return "A structured PDF designed for academic submission. Includes the full process timeline, sources, paste events, check-ins, and integrity chain status."
         }
     }
 }
@@ -66,6 +62,7 @@ struct ExportView: View {
     @State private var exportConfirmation: String? = nil
     @State private var exportError: String? = nil
     @State private var recentExports: [RecentExport] = []
+    @State private var authorName: String = ""
 
     // Promotion
     @State private var showPromoteSheet = false
@@ -102,6 +99,19 @@ struct ExportView: View {
                     Text(selectedFormat.shortDescription)
                         .font(.system(size: 13))
                         .foregroundColor(Brand.textSecondary)
+
+                    // Author name field — only for Authorship Report
+                    if selectedFormat == .authorshipReport {
+                        HStack(spacing: Brand.spaceSM) {
+                            Text("Author name:")
+                                .font(.system(size: 13))
+                                .foregroundColor(Brand.textSecondary)
+                            TextField("Your name", text: $authorName)
+                                .textFieldStyle(.roundedBorder)
+                                .font(.system(size: 13))
+                        }
+                        .padding(.top, 2)
+                    }
                 }
 
                 // ── Will be included ──────────────────────────────────────────
@@ -119,6 +129,9 @@ struct ExportView: View {
                         .font(.system(size: 11))
                         .foregroundColor(Brand.textMuted)
                         .padding(.top, Brand.spaceXS)
+
+                    // Integrity indicator
+                    integrityLine
                 }
 
                 // ── Export action ─────────────────────────────────────────────
@@ -204,7 +217,14 @@ struct ExportView: View {
             .padding(Brand.spaceXL)
         }
         .background(Brand.surfaceBase)
-        .onAppear { loadRecentExports() }
+        .onAppear {
+            loadRecentExports()
+            // Default author name from git config
+            Task.detached(priority: .background) {
+                let name = await Self.gitAuthorName()
+                await MainActor.run { if authorName.isEmpty { authorName = name } }
+            }
+        }
         .sheet(isPresented: $showPromoteSheet) {
             PromoteConfirmSheet(
                 projectName: state.project.name,
@@ -217,6 +237,52 @@ struct ExportView: View {
             } onCancel: {
                 showPromoteSheet = false
             }
+        }
+    }
+
+    // MARK: - Integrity line
+
+    private var integrityLine: some View {
+        HStack(spacing: 6) {
+            Image(systemName: integrityIcon)
+                .font(.system(size: 11))
+                .foregroundColor(integrityColor)
+            Text(integrityText)
+                .font(.system(size: 11))
+                .foregroundColor(integrityColor)
+        }
+    }
+
+    private var integrityIcon: String {
+        switch state.integrityStatus {
+        case .intact:            return "checkmark.shield.fill"
+        case .chainBroken, .historyRewritten: return "exclamationmark.triangle.fill"
+        default:                 return "shield.slash"
+        }
+    }
+
+    private var integrityColor: Color {
+        switch state.integrityStatus {
+        case .intact:            return Brand.statusBreakthrough
+        case .chainBroken, .historyRewritten: return Brand.statusStuck
+        default:                 return Brand.textMuted
+        }
+    }
+
+    private var integrityText: String {
+        switch state.integrityStatus {
+        case .intact(let since, _):
+            let fmt = DateFormatter()
+            fmt.dateStyle = .medium; fmt.timeStyle = .none
+            return "Ledger integrity: \u{2713} intact (chain since \(fmt.string(from: since)))"
+        case .chainBroken(let at, _, _, _):
+            return "Ledger integrity: \u{26A0} chain broken at line \(at) — review before exporting"
+        case .historyRewritten:
+            return "Ledger integrity: \u{26A0} git history rewritten — review before exporting"
+        case .checking:
+            return "Ledger integrity: checking\u{2026}"
+        case .unchecked:
+            return "Ledger integrity: no chain (pre-chain project)"
         }
     }
 
@@ -253,13 +319,17 @@ struct ExportView: View {
         exportConfirmation = nil
         exportError = nil
 
-        let proj  = state.project
-        let cis   = state.checkIns
-        let srcs  = state.sources
-        let arts  = state.artifacts
-        let snaps = state.snapshots
-        let evs   = state.events
-        let fmt   = selectedFormat
+        let proj     = state.project
+        let cis      = state.checkIns
+        let srcs     = state.sources
+        let arts     = state.artifacts
+        let snaps    = state.snapshots
+        let evs      = state.events
+        let mss      = state.manuscripts
+        let fmt      = selectedFormat
+        let author   = authorName
+        let iStatus  = state.integrityStatus
+        let chain    = LedgerIntegrity.readChain(from: state.project)
 
         Task {
             do {
@@ -298,6 +368,20 @@ struct ExportView: View {
                         try ExportService.exportMarkdown(project: proj, checkIns: cis,
                                                          sources: srcs, artifacts: arts,
                                                          snapshots: snaps, events: evs)
+                    }.value
+                    await MainActor.run {
+                        isExporting = false
+                        exportConfirmation = "Exported to \(url.lastPathComponent)"
+                        appendRecentExport(format: fmt, outputURL: url)
+                    }
+
+                case .authorshipReport:
+                    let url = try await Task.detached(priority: .userInitiated) {
+                        try ExportService.exportAuthorshipReport(
+                            project: proj, authorName: author,
+                            checkIns: cis, sources: srcs, artifacts: arts,
+                            manuscripts: mss, events: evs,
+                            integrityStatus: iStatus, chain: chain)
                     }.value
                     await MainActor.run {
                         isExporting = false
@@ -344,6 +428,22 @@ struct ExportView: View {
               let decoded = try? JSONDecoder().decode([RecentExport].self, from: data)
         else { return }
         recentExports = decoded
+    }
+
+    // MARK: - Git author name
+
+    private static func gitAuthorName() async -> String {
+        let proc = Process()
+        proc.executableURL = URL(fileURLWithPath: "/usr/bin/git")
+        proc.arguments = ["config", "user.name"]
+        let pipe = Pipe()
+        proc.standardOutput = pipe
+        proc.standardError  = FileHandle.nullDevice
+        try? proc.run()
+        proc.waitUntilExit()
+        let data = pipe.fileHandleForReading.readDataToEndOfFile()
+        return String(data: data, encoding: .utf8)?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
     }
 
     private func appendRecentExport(format: ExportFormat, outputURL: URL) {

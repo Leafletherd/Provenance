@@ -66,10 +66,13 @@ struct LedgerWriter {
 
     // MARK: - Event log
 
-    /// Appends a ledger event to ledger.md.
+    /// Appends a ledger event to ledger.md with an inline integrity hash suffix,
+    /// then updates .ledger/ledger.chain.json.
+    ///
     /// If `metadata` is provided, a stable UUID is generated, the metadata is written to
     /// .ledger/metadata/<uuid>.json, and the UUID is embedded in the ledger.md line as
     /// `<type>+<uuid>` so it can be retrieved on read-back.
+    ///
     /// - Returns: The UUID assigned to this event.
     @discardableResult
     static func appendEvent(type: LedgerEventType, detail: String,
@@ -80,18 +83,25 @@ struct LedgerWriter {
         // Write metadata side-file before the ledger line so it's always present
         // by the time readEvents tries to load it.
         if let metadata {
-            // Create the directory lazily for projects initialized before this field existed.
             try? FileManager.default.createDirectory(
                 at: project.metadataURL, withIntermediateDirectories: true)
             let sideURL = project.metadataURL.appendingPathComponent("\(eventID.uuidString).json")
             try? metadata.write(to: sideURL, options: .atomic)
         }
 
-        // ledger.md line: embed UUID only when there is a metadata side-file.
+        // Build the line content (everything except the hash suffix).
         let typeField = metadata != nil
             ? "\(type.rawValue)+\(eventID.uuidString)"
             : type.rawValue
-        let line = "[\(timestamp)] \(typeField) — \(detail)\n"
+        let lineContent = "[\(timestamp)] \(typeField) — \(detail)"
+
+        // Compute chain hash: SHA256(prevHead + lineContent).
+        let prevHead  = LedgerIntegrity.currentHead(project: project)
+        let newHash   = LedgerIntegrity.sha256hex(prevHead + lineContent)
+        let prefix12  = String(newHash.prefix(12))
+
+        // Full line written to ledger.md.
+        let line = "\(lineContent)  ·h: \(prefix12)\n"
         guard let data = line.data(using: .utf8) else { return eventID }
 
         let url = project.ledgerMDURL
@@ -102,6 +112,10 @@ struct LedgerWriter {
         } else {
             try? data.write(to: url, options: .atomic)
         }
+
+        // Update the chain sidecar.
+        LedgerIntegrity.appendHash(newHash, to: project)
+
         return eventID
     }
 
@@ -109,7 +123,12 @@ struct LedgerWriter {
         guard let content = try? String(contentsOf: project.ledgerMDURL, encoding: .utf8) else { return [] }
         let lines = content.split(separator: "\n", omittingEmptySubsequences: true)
         return lines.compactMap { line -> LedgerEvent? in
-            let s = String(line)
+            var s = String(line)
+            // Strip inline chain hash suffix before parsing.
+            let hashSep = "  ·h: "
+            if let sepRange = s.range(of: hashSep) {
+                s = String(s[..<sepRange.lowerBound])
+            }
             // Format: [<timestamp>] <type>[+<uuid>] — <detail>
             guard s.hasPrefix("[") else { return nil }
             guard let closeBracket = s.firstIndex(of: "]") else { return nil }

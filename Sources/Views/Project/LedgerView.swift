@@ -42,6 +42,7 @@ struct LedgerView: View {
     @State private var selectedFilter: LedgerFilter = .all
     @State private var selectedSeedEvent: LedgerEvent? = nil
     @State private var selectedPasteEvent: LedgerEvent? = nil
+    @State private var showIntegritySheet = false
 
     private let displayFmt: DateFormatter = {
         let fmt = DateFormatter()
@@ -50,6 +51,11 @@ struct LedgerView: View {
         return fmt
     }()
 
+    /// Index of the first chained event; events before it are pre-chain.
+    private var chainBoundaryIndex: Int {
+        state.events.firstIndex { $0.type == .chainStarted } ?? state.events.count
+    }
+
     var filteredEvents: [LedgerEvent] {
         if selectedFilter == .all { return state.events }
         return state.events.filter { selectedFilter.matches($0.type) }
@@ -57,7 +63,7 @@ struct LedgerView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // Filter bar
+            // Filter + integrity bar
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 6) {
                     ForEach([LedgerFilter.all, .pastes, .snapshots, .checkIns, .sources, .other],
@@ -67,8 +73,14 @@ struct LedgerView: View {
                         }
                     }
                     Spacer()
+
+                    // Integrity status chip
+                    IntegrityChipView(status: state.integrityStatus)
+                        .onTapGesture { showIntegritySheet = true }
+
                     Button {
                         state.reloadEvents()
+                        state.reloadIntegrity()
                     } label: {
                         Label("Refresh", systemImage: "arrow.clockwise")
                     }
@@ -87,8 +99,10 @@ struct LedgerView: View {
                     : "No \(selectedFilter.label.lowercased()) events.")
             } else {
                 List {
-                    ForEach(filteredEvents) { event in
-                        LedgerEventRowView(event: event, displayFmt: displayFmt)
+                    ForEach(Array(filteredEvents.enumerated()), id: \.element.id) { idx, event in
+                        let globalIdx = state.events.firstIndex(where: { $0.id == event.id }) ?? idx
+                        let isPreChain = globalIdx < chainBoundaryIndex
+                        LedgerEventRowView(event: event, displayFmt: displayFmt, isPreChain: isPreChain)
                             .listRowInsets(EdgeInsets(top: 3, leading: 12, bottom: 3, trailing: 12))
                             .contentShape(Rectangle())
                             .onTapGesture {
@@ -112,12 +126,266 @@ struct LedgerView: View {
         .sheet(item: $selectedPasteEvent) { event in
             PasteDetailView(event: event)
         }
+        .sheet(isPresented: $showIntegritySheet) {
+            IntegrityDetailSheet(state: state, isPresented: $showIntegritySheet)
+        }
+    }
+}
+
+// MARK: - Integrity chip
+
+struct IntegrityChipView: View {
+    let status: LedgerIntegrity.IntegrityStatus
+
+    private var label: String {
+        switch status {
+        case .checking:                return "Checking\u{2026}"
+        case .intact(_, let pre):
+            return pre > 0 ? "\u{2713} Chain intact" : "\u{2713} Chain intact"
+        case .chainBroken(let at, _, _, _): return "\u{26A0} Chain broken at \(at)"
+        case .historyRewritten:        return "\u{26A0} History rewritten"
+        case .unchecked:               return "◐ Unchained"
+        }
+    }
+
+    private var color: Color {
+        switch status {
+        case .checking, .unchecked:    return Brand.textMuted
+        case .intact:                  return Brand.statusBreakthrough
+        case .chainBroken, .historyRewritten: return Brand.statusStuck
+        }
+    }
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Text(label)
+                .font(.system(size: 11, weight: .medium))
+                .foregroundColor(color)
+
+            // Pre-chain pill (shown alongside intact if there are pre-chain events)
+            if case .intact(_, let pre) = status, pre > 0 {
+                Text("Pre-chain \(pre)")
+                    .font(.system(size: 10))
+                    .foregroundColor(Brand.textMuted)
+                    .padding(.horizontal, 5)
+                    .padding(.vertical, 2)
+                    .background(Brand.surfaceSunken)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: Brand.radiusSm)
+                            .stroke(Brand.border, lineWidth: 0.5)
+                    )
+                    .cornerRadius(Brand.radiusSm)
+            }
+        }
+        .padding(.horizontal, Brand.spaceSM)
+        .padding(.vertical, 4)
+        .background(color.opacity(0.08))
+        .overlay(
+            RoundedRectangle(cornerRadius: Brand.radiusMd)
+                .stroke(color.opacity(0.25), lineWidth: 0.5)
+        )
+        .cornerRadius(Brand.radiusMd)
+        .contentShape(Rectangle())
+    }
+}
+
+// MARK: - Integrity Detail sheet
+
+struct IntegrityDetailSheet: View {
+    @ObservedObject var state: ProjectState
+    @Binding var isPresented: Bool
+
+    @State private var showResetConfirm = false
+
+    private let dateFmt: DateFormatter = {
+        let f = DateFormatter(); f.dateStyle = .medium; f.timeStyle = .short; return f
+    }()
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Brand.spaceLG) {
+
+            Text("Ledger Integrity")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundColor(Brand.textPrimary)
+
+            // Chain status
+            VStack(alignment: .leading, spacing: Brand.spaceSM) {
+                Text("Chain status")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(Brand.textMuted)
+                    .textCase(.uppercase)
+                    .tracking(0.4)
+
+                chainStatusBody
+            }
+
+            Divider().overlay(Brand.border)
+
+            // Git status
+            VStack(alignment: .leading, spacing: Brand.spaceSM) {
+                Text("Git history status")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(Brand.textMuted)
+                    .textCase(.uppercase)
+                    .tracking(0.4)
+                gitStatusBody
+            }
+
+            Divider().overlay(Brand.border)
+
+            // Reset action
+            VStack(alignment: .leading, spacing: Brand.spaceSM) {
+                Text("Accept current state as new chain baseline")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundColor(Brand.textPrimary)
+                Text("Records a chainReset event and restarts the integrity chain from the current ledger state. This is always recorded — there is no silent reset.")
+                    .font(.system(size: 11))
+                    .foregroundColor(Brand.textMuted)
+                    .fixedSize(horizontal: false, vertical: true)
+                Button("Reset Chain\u{2026}", role: .destructive) {
+                    showResetConfirm = true
+                }
+                .buttonStyle(.bordered)
+            }
+
+            HStack {
+                Spacer()
+                Button("Done") { isPresented = false }
+                    .buttonStyle(.borderedProminent)
+                    .keyboardShortcut(.defaultAction)
+            }
+        }
+        .padding(Brand.spaceXL)
+        .frame(width: 480)
+        .background(Brand.surfaceBase)
+        .confirmationDialog("Reset Chain?",
+                            isPresented: $showResetConfirm,
+                            titleVisibility: .visible) {
+            Button("Reset Chain", role: .destructive) {
+                let description = statusDescription
+                LedgerIntegrity.resetChain(project: state.project,
+                                           previousStatusDescription: description)
+                state.reloadIntegrity()
+                isPresented = false
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This cannot be undone. The reset will be recorded as a chainReset event in the ledger.")
+        }
+    }
+
+    @ViewBuilder
+    private var chainStatusBody: some View {
+        switch state.integrityStatus {
+        case .checking:
+            Label("Checking\u{2026}", systemImage: "clock")
+                .font(.system(size: 13))
+                .foregroundColor(Brand.textMuted)
+        case .intact(let since, let pre):
+            VStack(alignment: .leading, spacing: 4) {
+                Label("Chain intact since \(dateFmt.string(from: since))",
+                      systemImage: "checkmark.shield.fill")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundColor(Brand.statusBreakthrough)
+                if pre > 0 {
+                    Text("\(pre) events predate the chain and are not hash-verified.")
+                        .font(.system(size: 11))
+                        .foregroundColor(Brand.textMuted)
+                }
+                chainHeadView
+            }
+        case .chainBroken(let at, let expected, let found, let content):
+            VStack(alignment: .leading, spacing: 6) {
+                Label("Chain broken at line \(at)", systemImage: "exclamationmark.shield.fill")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundColor(Brand.statusStuck)
+                DetailRow(label: "Expected prefix", value: expected)
+                DetailRow(label: "Found prefix",    value: found)
+                DetailRow(label: "Line content",    value: String(content.prefix(80)))
+            }
+        case .historyRewritten:
+            Label("Chain intact", systemImage: "checkmark.shield")
+                .font(.system(size: 13))
+                .foregroundColor(Brand.statusBreakthrough)
+        case .unchecked:
+            Label("No integrity chain (pre-chain project)",
+                  systemImage: "shield.slash")
+                .font(.system(size: 13))
+                .foregroundColor(Brand.textMuted)
+        }
+    }
+
+    @ViewBuilder
+    private var gitStatusBody: some View {
+        switch state.integrityStatus {
+        case .historyRewritten(let missing):
+            VStack(alignment: .leading, spacing: 6) {
+                Label("Git history rewritten — \(missing.count) missing commit\(missing.count == 1 ? "" : "s")",
+                      systemImage: "exclamationmark.triangle.fill")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundColor(Brand.statusStuck)
+                ForEach(missing, id: \.hash) { entry in
+                    HStack {
+                        Text(entry.hash)
+                            .font(.system(size: 10, design: .monospaced))
+                            .foregroundColor(Brand.textSecondary)
+                        Spacer()
+                        Text(dateFmt.string(from: entry.date))
+                            .font(.system(size: 10))
+                            .foregroundColor(Brand.textMuted)
+                    }
+                }
+            }
+        default:
+            Label("Git history consistent", systemImage: "checkmark.circle.fill")
+                .font(.system(size: 13))
+                .foregroundColor(Brand.statusBreakthrough)
+        }
+    }
+
+    @ViewBuilder
+    private var chainHeadView: some View {
+        if let chain = LedgerIntegrity.readChain(from: state.project) {
+            Text("Head: \(chain.head)")
+                .font(.system(size: 9, design: .monospaced))
+                .foregroundColor(Brand.textMuted)
+                .lineLimit(1)
+                .truncationMode(.middle)
+        }
+    }
+
+    private var statusDescription: String {
+        switch state.integrityStatus {
+        case .intact:                   return "intact"
+        case .chainBroken(let at, _, _, _): return "broken at line \(at)"
+        case .historyRewritten:         return "git history rewritten"
+        case .checking:                 return "checking"
+        case .unchecked:                return "unchecked"
+        }
+    }
+}
+
+private struct DetailRow: View {
+    let label: String
+    let value: String
+    var body: some View {
+        HStack(alignment: .top) {
+            Text(label + ":")
+                .font(.system(size: 10, weight: .medium))
+                .foregroundColor(Brand.textMuted)
+                .frame(width: 110, alignment: .trailing)
+            Text(value)
+                .font(.system(size: 10, design: .monospaced))
+                .foregroundColor(Brand.textSecondary)
+                .lineLimit(2)
+        }
     }
 }
 
 struct LedgerEventRowView: View {
     let event: LedgerEvent
     let displayFmt: DateFormatter
+    var isPreChain: Bool = false
 
     var eventColor: Color {
         switch event.type {
@@ -138,6 +406,8 @@ struct LedgerEventRowView: View {
         case .paste:               return Color(hex: "7C6F9F")  // muted violet — provenance/origin
         case .bundleExported:      return Brand.accent
         case .promotedToWorks:     return Brand.accentDark
+        case .chainStarted:        return Brand.accent
+        case .chainReset:          return Brand.statusStuck
         case .error:               return Color.red
         }
     }
@@ -158,7 +428,20 @@ struct LedgerEventRowView: View {
                 HStack {
                     Text(event.type.displayName)
                         .font(.caption.bold())
-                        .foregroundColor(eventColor)
+                        .foregroundColor(isPreChain ? Brand.textMuted : eventColor)
+                    if isPreChain {
+                        Text("pre-chain")
+                            .font(.system(size: 8, weight: .medium))
+                            .foregroundColor(Brand.textMuted)
+                            .padding(.horizontal, 4)
+                            .padding(.vertical, 1)
+                            .background(Brand.surfaceSunken)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: Brand.radiusSm)
+                                    .stroke(Brand.border, lineWidth: 0.5)
+                            )
+                            .cornerRadius(Brand.radiusSm)
+                    }
                     Spacer()
                     Text(displayFmt.string(from: event.timestamp))
                         .font(.caption2)
@@ -171,12 +454,12 @@ struct LedgerEventRowView: View {
                 }
                 Text(event.detail)
                     .font(.caption)
-                    .foregroundColor(Brand.textPrimary)
+                    .foregroundColor(isPreChain ? Brand.textMuted : Brand.textPrimary)
                     .lineLimit(3)
             }
         }
         .padding(.vertical, 2)
-        .opacity(isTappable ? 1 : 1)   // reserved for future dimming
+        .opacity(isPreChain ? 0.65 : 1.0)
     }
 }
 
