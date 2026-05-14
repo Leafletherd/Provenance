@@ -20,6 +20,7 @@ enum LedgerEventType: String, Codable, CaseIterable {
     case promotedToWorks     = "promoted_to_works"
     case chainStarted        = "chain_started"
     case chainReset          = "chain_reset"
+    case manifestMigrated    = "manifest_migrated"
     case error               = "error"
 
     var displayName: String {
@@ -43,6 +44,7 @@ enum LedgerEventType: String, Codable, CaseIterable {
         case .promotedToWorks:     return "Promoted to Works"
         case .chainStarted:        return "Chain Started"
         case .chainReset:          return "Chain Reset"
+        case .manifestMigrated:    return "Manifest Migrated"
         case .error:               return "Error"
         }
     }

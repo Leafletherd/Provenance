@@ -6,6 +6,9 @@ struct Manifest: Codable {
     var originalPath: String
     var provenanceVersion: String
     var medium: String?
+    /// Stable cross-folder identity (Contract B). Nil in pre-PR-10 manifests;
+    /// populated by migrateManifestProjectId() on first launch after PR-10.
+    var projectId: String?
 }
 
 struct LedgerWriter {
@@ -44,7 +47,8 @@ struct LedgerWriter {
             createdAt: project.connectedAt,
             originalPath: project.folderURL.path,
             provenanceVersion: "1.0",
-            medium: project.medium
+            medium: project.medium,
+            projectId: project.projectId
         )
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
@@ -503,5 +507,74 @@ struct LedgerWriter {
             return URL(fileURLWithPath: currentPath)
         }
         return nil
+    }
+
+    // MARK: - Manifest helpers (PR-10)
+
+    static func readManifest(from project: Project) -> Manifest? {
+        guard let data = try? Data(contentsOf: project.manifestURL) else { return nil }
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        return try? decoder.decode(Manifest.self, from: data)
+    }
+
+    static func writeManifest(_ manifest: Manifest, to project: Project) {
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        encoder.outputFormatting = .prettyPrinted
+        guard let data = try? encoder.encode(manifest) else { return }
+        try? data.write(to: project.manifestURL, options: .atomic)
+    }
+
+    /// Reads the projectId from the manifest at the given folder URL (not project URL).
+    /// Used by ProjectLocator.scanForProjectId and the Locate flow.
+    static func readProjectIdFromManifest(at folderURL: URL) -> String? {
+        let manifestURL = folderURL
+            .appendingPathComponent(".ledger")
+            .appendingPathComponent("manifest.json")
+        guard let data = try? Data(contentsOf: manifestURL) else { return nil }
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        return (try? decoder.decode(Manifest.self, from: data))?.projectId
+    }
+
+    /// Reads the project name from the manifest at the given folder URL.
+    /// Used by the Locate flow when matching pre-PR-10 manifests.
+    static func readProjectNameFromManifest(at folderURL: URL) -> String? {
+        let manifestURL = folderURL
+            .appendingPathComponent(".ledger")
+            .appendingPathComponent("manifest.json")
+        guard let data = try? Data(contentsOf: manifestURL) else { return nil }
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        return (try? decoder.decode(Manifest.self, from: data))?.projectName
+    }
+
+    /// Writes a projectId into an existing manifest.json at the given folder URL.
+    /// Used by the Locate flow to back-fill identity into pre-PR-10 manifests.
+    static func writeProjectIdToManifest(projectId: String, to folderURL: URL) {
+        let manifestURL = folderURL
+            .appendingPathComponent(".ledger")
+            .appendingPathComponent("manifest.json")
+        guard let data = try? Data(contentsOf: manifestURL) else { return }
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        guard var manifest = try? decoder.decode(Manifest.self, from: data) else { return }
+        manifest.projectId = projectId
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        encoder.outputFormatting = .prettyPrinted
+        guard let updated = try? encoder.encode(manifest) else { return }
+        try? updated.write(to: manifestURL, options: .atomic)
+    }
+
+    /// If the manifest lacks a projectId, assign the project's projectId, write it back
+    /// atomically, and log a manifestMigrated event. Idempotent — no-op if already set.
+    static func migrateManifestProjectId(project: Project) {
+        guard var manifest = readManifest(from: project),
+              manifest.projectId == nil else { return }
+        manifest.projectId = project.projectId
+        writeManifest(manifest, to: project)
+        appendEvent(type: .manifestMigrated, detail: "Assigned projectId.", to: project)
     }
 }

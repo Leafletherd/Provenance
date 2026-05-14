@@ -18,8 +18,10 @@ class AppState: ObservableObject {
     @Published var pendingConnectURL: URL? = nil
     /// Set by the URL scheme handler; consumed by ProjectView to switch tabs.
     @Published var pendingDeepLink: DeepLinkAction? = nil
+    /// Transient toast message (auto-clears after 2.5 s). Views show this as an overlay.
+    @Published var toastMessage: String? = nil
 
-    private let store = ProjectStore()
+    let store = ProjectStore()  // internal so MissingProjectView can call store.update
 
     var selectedState: ProjectState? {
         projectStates.first { $0.project.id == selectedProjectID }
@@ -30,13 +32,45 @@ class AppState: ObservableObject {
     func onLaunch() {
         for project in store.projects {
             let state = ProjectState(project: project)
-            state.loadData()
-            state.startWatching()
-            // Refresh nested-repo excludes on every launch so repos cloned into the
-            // project while Provenance was closed get excluded immediately.
-            state.refreshNestedExcludes()
             projectStates.append(state)
-            checkForFolderMove(state: state)
+
+            let fm = FileManager.default
+            var isDir: ObjCBool = false
+            let pathExists = fm.fileExists(atPath: project.folderURL.path, isDirectory: &isDir)
+                          && isDir.boolValue
+
+            if pathExists {
+                // Fast path: folder present at the stored location.
+                state.resolutionStatus = .found(project.folderURL)
+                state.loadData()
+                state.startWatching()
+                state.refreshNestedExcludes()
+                checkForFolderMove(state: state)
+                // Manifest projectId migration (idempotent — fast JSON read/write)
+                LedgerWriter.migrateManifestProjectId(project: project)
+            } else {
+                // Folder missing — resolve in background (may involve a directory scan).
+                state.resolutionStatus = .notFound  // tentative until scan completes
+                let proj = project
+                Task.detached(priority: .background) { [weak self, weak state] in
+                    guard let self, let state else { return }
+                    let result = ProjectLocator.resolve(proj)
+                    await MainActor.run { [weak self, weak state] in
+                        guard let self, let state else { return }
+                        state.resolutionStatus = result
+                        if case .foundRelocated(let url, let bm) = result {
+                            var updated = proj
+                            updated.folderURL      = url
+                            updated.folderBookmark = bm
+                            state.updateProject(updated)
+                            self.store.update(updated)
+                            state.loadData()
+                            state.startWatching()
+                            LedgerWriter.migrateManifestProjectId(project: updated)
+                        }
+                    }
+                }
+            }
         }
         // Home is the default landing; no project pre-selected.
         selectedProjectID = nil
@@ -62,15 +96,41 @@ class AppState: ObservableObject {
         let fileCount = LedgerWriter.countProjectFiles(at: url)
         let name = displayName ?? url.lastPathComponent
 
+        // Capture NSURL bookmark for transparent relocation tracking.
+        let bookmark = try? url.bookmarkData(
+            options: .withSecurityScope,
+            includingResourceValuesForKeys: nil,
+            relativeTo: nil
+        )
+
+        // Read any projectId already in the folder's manifest. An existing id means
+        // this folder is a previously-tracked Provenance project.
+        let manifestProjectId = LedgerWriter.readProjectIdFromManifest(at: url)
+
+        // Section 9: duplicate-projectId guard — if this folder's projectId already
+        // maps to an entry in our store, update the existing entry's path/bookmark
+        // rather than creating a duplicate.
+        if let existingId = manifestProjectId,
+           let existingState = projectStates.first(where: { $0.project.projectId == existingId }) {
+            var updated = existingState.project
+            updated.folderURL      = url
+            updated.folderBookmark = bookmark
+            existingState.updateProject(updated)
+            store.update(updated)
+            selectedProjectID = updated.id
+            isHomeSelected = false
+            showToast("Updated location for \u{201C}\(updated.name)\u{201D}.")
+            return
+        }
+
         let project = Project(
             id: UUID(),
+            projectId: manifestProjectId ?? UUID().uuidString,
             name: name,
             folderURL: url,
+            folderBookmark: bookmark,
             connectedAt: Date(),
-            lastActivity: Date(),
-            medium: nil,
-            workingDescription: nil,
-            intent: nil
+            lastActivity: Date()
         )
 
         // Ledger init is fast (just creating directories and files). Rethrow so callers
@@ -118,6 +178,18 @@ class AppState: ObservableObject {
             } else {
                 selectedProjectID = nil
                 isHomeSelected = true
+            }
+        }
+    }
+
+    // MARK: - Toast
+
+    func showToast(_ message: String) {
+        toastMessage = message
+        Task {
+            try? await Task.sleep(nanoseconds: 2_500_000_000)
+            await MainActor.run { [weak self] in
+                self?.toastMessage = nil
             }
         }
     }

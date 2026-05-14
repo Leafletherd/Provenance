@@ -408,6 +408,7 @@ struct LedgerEventRowView: View {
         case .promotedToWorks:     return Brand.accentDark
         case .chainStarted:        return Brand.accent
         case .chainReset:          return Brand.statusStuck
+        case .manifestMigrated:    return Brand.textMuted
         case .error:               return Color.red
         }
     }

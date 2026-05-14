@@ -24,6 +24,8 @@ struct ExportService {
 
     private struct BundleProjectSummary: Codable {
         let name: String
+        /// Stable cross-folder identity — Contract B optional-but-recommended field.
+        let projectId: String?
         let medium: String?
         let workingDescription: String?
         let intent: String?
@@ -93,8 +95,15 @@ struct ExportService {
         try manifestData.write(to: tmpURL.appendingPathComponent("manifest.json"), options: .atomic)
 
         // ── process.json ──────────────────────────────────────────────────────
+        // Defensive: ensure manifest has projectId (migration should have run at launch).
+        if LedgerWriter.readProjectIdFromManifest(at: project.folderURL) == nil {
+            LedgerWriter.writeProjectIdToManifest(projectId: project.projectId, to: project.folderURL)
+            LedgerWriter.appendEvent(type: .manifestMigrated, detail: "Assigned projectId.", to: project)
+        }
+
         let projSummary = BundleProjectSummary(
             name: project.name,
+            projectId: project.projectId,
             medium: project.medium,
             workingDescription: project.workingDescription,
             intent: project.intent,

@@ -63,23 +63,35 @@ struct SidebarView: View {
                             ProjectRowView(state: state)
                                 .tag(SidebarItem.project(state.project.id))
                                 .contextMenu {
-                                    Button("Reveal in Finder") {
-                                        NSWorkspace.shared.activateFileViewerSelecting(
-                                            [state.project.folderURL]
-                                        )
-                                    }
-                                    Button("Rename\u{2026}") {
-                                        renameText = state.project.name
-                                        renameProjectID = state.project.id
-                                    }
-                                    Button("Promote to Works\u{2026}") {
-                                        promoteState = state
-                                        showPromoteSheet = true
-                                    }
-                                    Divider()
-                                    Button("Disconnect Project", role: .destructive) {
-                                        projectToRemove = state.project.id
-                                        showRemoveAlert = true
+                                    // Missing-state actions at top
+                                    if !state.resolutionStatus.isAccessible {
+                                        Button("Locate Folder\u{2026}") {
+                                            appState.selectedProjectID = state.project.id
+                                            appState.isHomeSelected = false
+                                        }
+                                        Button("Disconnect Project", role: .destructive) {
+                                            projectToRemove = state.project.id
+                                            showRemoveAlert = true
+                                        }
+                                    } else {
+                                        Button("Reveal in Finder") {
+                                            NSWorkspace.shared.activateFileViewerSelecting(
+                                                [state.project.folderURL]
+                                            )
+                                        }
+                                        Button("Rename\u{2026}") {
+                                            renameText = state.project.name
+                                            renameProjectID = state.project.id
+                                        }
+                                        Button("Promote to Works\u{2026}") {
+                                            promoteState = state
+                                            showPromoteSheet = true
+                                        }
+                                        Divider()
+                                        Button("Disconnect Project", role: .destructive) {
+                                            projectToRemove = state.project.id
+                                            showRemoveAlert = true
+                                        }
                                     }
                                 }
                         }
@@ -219,25 +231,49 @@ struct SidebarView: View {
 struct ProjectRowView: View {
     @ObservedObject var state: ProjectState
 
+    private var isMissing: Bool { !state.resolutionStatus.isAccessible }
+
+    private var missingSubtext: String? {
+        switch state.resolutionStatus {
+        case .volumeUnmounted(let vol): return "On \u{201C}\(vol)\u{201D} \u{2014} not connected."
+        case .notFound:                 return "Folder couldn\u{2019}t be found."
+        default:                        return nil
+        }
+    }
+
     var body: some View {
         HStack(alignment: .center, spacing: 10) {
-            Circle()
-                .fill(state.isWatching ? Brand.accent : Brand.textMuted)
-                .frame(width: 8, height: 8)
+            if isMissing {
+                Image(systemName: "exclamationmark.triangle")
+                    .font(.system(size: 10))
+                    .foregroundColor(Brand.statusStuck)
+            } else {
+                Circle()
+                    .fill(state.isWatching ? Brand.accent : Brand.textMuted)
+                    .frame(width: 8, height: 8)
+            }
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(state.project.name)
                     .font(.headline)
                     .lineLimit(1)
+                    .foregroundColor(isMissing ? Brand.textMuted : Brand.textPrimary)
 
                 Text(state.project.folderURL.lastPathComponent)
                     .font(.caption)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(Brand.textMuted)
                     .lineLimit(1)
 
-                Text(state.project.lastActivity, style: .relative)
-                    .font(.caption2)
-                    .foregroundColor(.secondary)
+                if let sub = missingSubtext {
+                    Text(sub)
+                        .font(.caption2.italic())
+                        .foregroundColor(Brand.textMuted)
+                        .lineLimit(1)
+                } else {
+                    Text(state.project.lastActivity, style: .relative)
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                }
             }
         }
         .padding(.vertical, 4)

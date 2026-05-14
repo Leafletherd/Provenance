@@ -13,12 +13,16 @@ class ProjectState: ObservableObject, Identifiable {
     @Published var isWatching: Bool = false
     @Published var pendingFilesChanged: Bool = false
     @Published var integrityStatus: LedgerIntegrity.IntegrityStatus = .checking
+    /// Current folder-resolution result. Drives sidebar muting and missing-project pane.
+    @Published var resolutionStatus: ProjectLocator.ResolutionResult = .found(URL(fileURLWithPath: "/"))
 
     nonisolated let id: UUID
 
     private var watcher: FileWatcher?
     private var scheduledTimer: Timer?
     private var debounceWorkItem: DispatchWorkItem?
+    /// Background retry task for volume-unmounted projects. Cancelled on deselect.
+    private var unmountedRetryTask: Task<Void, Never>?
     // Cache of last-seen .sceneboard file contents, keyed by file URL path.
     // Used to diff SceneBoard changes when the file is modified.
     private var sceneBoardCache: [String: Data] = [:]
@@ -405,6 +409,64 @@ class ProjectState: ObservableObject, Identifiable {
 
     func updateProject(_ updated: Project) {
         project = updated
+    }
+
+    // MARK: - Relocation recovery
+
+    /// Starts the 30-second retry loop for volume-unmounted projects.
+    /// Call when this project is selected; stop when deselected.
+    func startUnmountedRetry() {
+        guard case .volumeUnmounted = resolutionStatus else { return }
+        guard unmountedRetryTask == nil else { return }
+        unmountedRetryTask = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 30_000_000_000)
+                guard !Task.isCancelled else { break }
+                await self?.recheckResolution()
+            }
+        }
+    }
+
+    func stopUnmountedRetry() {
+        unmountedRetryTask?.cancel()
+        unmountedRetryTask = nil
+    }
+
+    /// Re-runs full resolution and updates state / resumes watching if found.
+    /// Safe to call from any context — switches to main actor for @Published writes.
+    func recheckResolution() async {
+        let proj = project
+        let result = await Task.detached(priority: .background) {
+            ProjectLocator.resolve(proj)
+        }.value
+
+        resolutionStatus = result
+
+        switch result {
+        case .found(let url):
+            stopUnmountedRetry()
+            if !isWatching {
+                var updated = project
+                updated.folderURL = url
+                project = updated
+                loadData()
+                startWatching()
+            }
+
+        case .foundRelocated(let url, let bm):
+            stopUnmountedRetry()
+            var updated = project
+            updated.folderURL = url
+            updated.folderBookmark = bm
+            project = updated
+            if !isWatching {
+                loadData()
+                startWatching()
+            }
+
+        case .volumeUnmounted, .notFound:
+            break  // keep waiting
+        }
     }
 
     // MARK: - Events
