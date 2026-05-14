@@ -80,5 +80,12 @@ struct ProjectView: View {
         .sheet(isPresented: $showExportSheet) {
             ExportSheet(state: state, isPresented: $showExportSheet)
         }
+        // provenance://reveal?path=…&tab=<tab> — switch to the requested tab.
+        .onChange(of: appState.pendingDeepLink) { link in
+            guard case let .selectTab(projectID, tab) = link,
+                  projectID == state.project.id else { return }
+            selectedTab = tab
+            appState.pendingDeepLink = nil
+        }
     }
 }

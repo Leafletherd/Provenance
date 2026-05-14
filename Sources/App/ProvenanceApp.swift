@@ -12,6 +12,9 @@ struct ProvenanceApp: App {
                 .onAppear {
                     appState.onLaunch()
                 }
+                .onOpenURL { url in
+                    appState.handleURL(url)
+                }
         }
         .windowStyle(.titleBar)
         .windowToolbarStyle(.unified(showsTitle: true))

@@ -1,10 +1,21 @@
 import Foundation
 import SwiftUI
 
+/// Deep-link actions dispatched by the `provenance://` URL scheme handler.
+enum DeepLinkAction: Equatable {
+    /// Select a named tab inside the project with the given ID.
+    case selectTab(projectID: UUID, tab: ProjectTab)
+}
+
 @MainActor
 class AppState: ObservableObject {
     @Published var projectStates: [ProjectState] = []
     @Published var selectedProjectID: UUID? = nil
+    /// Set when `provenance://open?path=` points to an unconnected folder.
+    /// The UI observes this and offers a "Connect" confirmation.
+    @Published var pendingConnectURL: URL? = nil
+    /// Set by the URL scheme handler; consumed by ProjectView to switch tabs.
+    @Published var pendingDeepLink: DeepLinkAction? = nil
 
     private let store = ProjectStore()
 
@@ -110,6 +121,59 @@ class AppState: ObservableObject {
             updated.folderURL = newURL
             state.updateProject(updated)
             store.update(updated)
+        }
+    }
+
+    // MARK: - URL scheme (provenance://)
+
+    /// Handles incoming `provenance://` URLs.
+    ///
+    /// - `provenance://open?path=<encoded-folder-path>`
+    ///   Selects the matching project, or sets `pendingConnectURL` so the UI
+    ///   can offer a "Connect" confirmation.
+    ///
+    /// - `provenance://reveal?path=<encoded-file-path>&tab=<tab>`
+    ///   Selects the project that contains the file and requests a tab switch.
+    func handleURL(_ url: URL) {
+        guard url.scheme?.lowercased() == "provenance",
+              let components = URLComponents(url: url, resolvingAgainstBaseURL: false)
+        else { return }
+
+        let host = url.host?.lowercased() ?? ""
+        let queryPath = components.queryItems?.first(where: { $0.name == "path" })?.value
+
+        switch host {
+
+        case "open":
+            guard let pathStr = queryPath, !pathStr.isEmpty else { return }
+            let folderURL = URL(fileURLWithPath: pathStr)
+            if let existing = projectStates.first(where: { $0.project.folderURL == folderURL }) {
+                selectedProjectID = existing.project.id
+                NSApp.activate(ignoringOtherApps: true)
+            } else {
+                pendingConnectURL = folderURL
+                NSApp.activate(ignoringOtherApps: true)
+            }
+
+        case "reveal":
+            guard let pathStr = queryPath, !pathStr.isEmpty else { return }
+            let fileURL    = URL(fileURLWithPath: pathStr)
+            let tabStr     = components.queryItems?.first(where: { $0.name == "tab" })?.value ?? "overview"
+            let tab        = ProjectTab.allCases.first {
+                $0.rawValue.lowercased() == tabStr.lowercased()
+            } ?? .overview
+
+            if let state = projectStates.first(where: {
+                fileURL.path.hasPrefix($0.project.folderURL.path + "/") ||
+                fileURL.path == $0.project.folderURL.path
+            }) {
+                selectedProjectID = state.project.id
+                pendingDeepLink   = .selectTab(projectID: state.project.id, tab: tab)
+                NSApp.activate(ignoringOtherApps: true)
+            }
+
+        default:
+            break
         }
     }
 

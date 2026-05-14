@@ -4,27 +4,31 @@ import AppKit
 // MARK: - Export format
 
 enum ExportFormat: String, CaseIterable {
-    case pdf    = "pdf"
-    case bundle = "bundle"
+    case pdf      = "pdf"
+    case bundle   = "bundle"
+    case markdown = "markdown"
 
     var label: String {
         switch self {
-        case .pdf:    return "PDF Report"
-        case .bundle: return "Bundle for Works"
+        case .pdf:      return "PDF Report"
+        case .bundle:   return "Bundle for Works"
+        case .markdown: return "Markdown Document"
         }
     }
 
     var icon: String {
         switch self {
-        case .pdf:    return "doc.richtext"
-        case .bundle: return "shippingbox"
+        case .pdf:      return "doc.richtext"
+        case .bundle:   return "shippingbox"
+        case .markdown: return "doc.plaintext"
         }
     }
 
     var heading: String {
         switch self {
-        case .pdf:    return "PDF Report (.pdf)"
-        case .bundle: return "Bundle for Works (.provenance.bundle/)"
+        case .pdf:      return "PDF Report (.pdf)"
+        case .bundle:   return "Bundle for Works (.provenance.bundle/)"
+        case .markdown: return "Markdown Document (.md)"
         }
     }
 
@@ -34,6 +38,8 @@ enum ExportFormat: String, CaseIterable {
             return "A formatted PDF document covering the full project timeline, check-ins, sources, artifacts, and version summary. Saved inside .ledger/export/."
         case .bundle:
             return "A structured directory at the project root that Works and other tools can detect and use to pre-fill metadata. Includes machine-readable process.json and human-readable markdown files. Re-running overwrites atomically."
+        case .markdown:
+            return "A single .md file rendering the full project report — headings, lists, and links. Compatible with Obsidian, Bear, GitHub, and any text editor. Saved inside .ledger/export/."
         }
     }
 }
@@ -211,6 +217,19 @@ struct ExportSheet: View {
                         isPresented = false
                         defaultFormatRaw = fmt.rawValue
                         NSWorkspace.shared.activateFileViewerSelecting([result.url])
+                    }
+
+                case .markdown:
+                    let url = try await Task.detached(priority: .userInitiated) {
+                        try ExportService.exportMarkdown(project: proj, checkIns: cis,
+                                                         sources: srcs, artifacts: arts,
+                                                         snapshots: snaps, events: evs)
+                    }.value
+                    await MainActor.run {
+                        isExporting = false
+                        isPresented = false
+                        defaultFormatRaw = fmt.rawValue
+                        NSWorkspace.shared.open(url)
                     }
                 }
             } catch {
