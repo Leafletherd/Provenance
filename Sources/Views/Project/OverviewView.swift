@@ -28,10 +28,10 @@ struct OverviewView: View {
                 // Display name
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Display Name")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
+                        .font(.system(size: 12))
+                        .foregroundColor(Brand.textSecondary)
                     TextField("Display name", text: $projectName)
-                        .font(.title2)
+                        .font(.system(size: 22, weight: .bold))
                         .textFieldStyle(.plain)
                         .onChange(of: projectName) { newValue in
                             nameDebounceTask?.cancel()
@@ -55,12 +55,12 @@ struct OverviewView: View {
                 // Folder path
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Folder")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
+                        .font(.system(size: 12))
+                        .foregroundColor(Brand.textSecondary)
                     HStack {
                         Text(state.project.folderURL.path)
-                            .font(.system(.body, design: .monospaced))
-                            .foregroundColor(.primary)
+                            .font(.system(size: 13, design: .monospaced))
+                            .foregroundColor(Brand.textPrimary)
                             .lineLimit(1)
                             .truncationMode(.middle)
                         Spacer()
@@ -77,8 +77,8 @@ struct OverviewView: View {
                 // Stats
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Activity")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
+                        .font(.system(size: 12))
+                        .foregroundColor(Brand.textSecondary)
                     HStack(spacing: 16) {
                         StatBadge(count: state.snapshots.count, label: "versions")
                         StatBadge(count: state.checkIns.count, label: "check-ins")
@@ -86,61 +86,12 @@ struct OverviewView: View {
                         StatBadge(count: state.artifacts.count, label: "artifacts")
                     }
                     Text("Connected \(displayFmt.string(from: state.project.connectedAt))")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
+                        .font(.system(size: 12))
+                        .foregroundColor(Brand.textSecondary)
                         .padding(.top, 4)
                     Text("Last activity \(displayFmt.string(from: state.project.lastActivity))")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
-
-                Divider()
-
-                // Paste tracking override
-                VStack(alignment: .leading, spacing: 6) {
-                    let globalOn = UserDefaults.standard.object(forKey: "trackPasteSources") as? Bool ?? true
-                    let effectiveOn = state.project.trackPasteSources ?? globalOn
-
-                    HStack(alignment: .top, spacing: 10) {
-                        Toggle("", isOn: Binding(
-                            get: { state.project.trackPasteSources ?? globalOn },
-                            set: { newValue in
-                                var updated = state.project
-                                // If the user is toggling back to the global default, clear the override.
-                                updated.trackPasteSources = (newValue == globalOn) ? nil : newValue
-                                state.updateProject(updated)
-                                appState.updateProject(updated)
-                            }
-                        ))
-                        .toggleStyle(.switch)
-                        .controlSize(.small)
-                        .labelsHidden()
-
-                        VStack(alignment: .leading, spacing: 2) {
-                            HStack(spacing: 6) {
-                                Text("Track paste sources")
-                                    .font(.callout)
-                                if state.project.trackPasteSources == nil {
-                                    Text("global default")
-                                        .font(.caption2)
-                                        .foregroundColor(Brand.textMuted)
-                                        .padding(.horizontal, 5)
-                                        .padding(.vertical, 2)
-                                        .background(Brand.surfaceSunken)
-                                        .overlay(
-                                            RoundedRectangle(cornerRadius: 3)
-                                                .stroke(Brand.border, lineWidth: 0.5)
-                                        )
-                                        .cornerRadius(3)
-                                }
-                            }
-                            Text(effectiveOn
-                                 ? "Provenance will record where pasted text came from in this project."
-                                 : "Paste-source recording is disabled for this project.")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                        }
-                    }
+                        .font(.system(size: 12))
+                        .foregroundColor(Brand.textSecondary)
                 }
 
                 Divider()
@@ -149,7 +100,7 @@ struct OverviewView: View {
                 VStack(alignment: .leading, spacing: 12) {
                     HStack {
                         Text("Project Context")
-                            .font(.headline)
+                            .font(.system(size: 18, weight: .semibold))
                         Spacer()
                         Button("Edit Context") {
                             medium = state.project.medium ?? ""
@@ -174,8 +125,8 @@ struct OverviewView: View {
                         (state.project.workingDescription == nil || state.project.workingDescription!.isEmpty) &&
                         (state.project.intent == nil || state.project.intent!.isEmpty) {
                         Text("No context added yet. Click \"Edit Context\" to add medium, description, and intent.")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
+                            .font(.system(size: 12))
+                            .foregroundColor(Brand.textSecondary)
                     }
                 }
 
@@ -185,7 +136,7 @@ struct OverviewView: View {
                 VStack(alignment: .leading, spacing: 10) {
                     HStack {
                         Text("Manuscripts")
-                            .font(.headline)
+                            .font(.system(size: 18, weight: .semibold))
                         Spacer()
                         Button {
                             state.scanManuscripts()
@@ -269,10 +220,10 @@ struct StatBadge: View {
     var body: some View {
         VStack(spacing: 2) {
             Text("\(count)")
-                .font(.title3.bold())
+                .font(.system(size: 22, weight: .bold))
                 .foregroundColor(Brand.textPrimary)
             Text(label)
-                .font(.caption2)
+                .font(.system(size: 10))
                 .foregroundColor(Brand.textMuted)
         }
         .padding(.horizontal, Brand.spaceMD)
@@ -293,10 +244,10 @@ struct LabeledField: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(label)
-                .font(.caption)
-                .foregroundColor(.secondary)
+                .font(.system(size: 12))
+                .foregroundColor(Brand.textSecondary)
             Text(value)
-                .font(.body)
+                .font(.system(size: 13))
         }
     }
 }
@@ -311,34 +262,34 @@ struct ContextSheetView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text("Project Context")
-                .font(.headline)
+                .font(.system(size: 18, weight: .semibold))
 
             VStack(alignment: .leading, spacing: 4) {
                 Text("Medium")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
+                    .font(.system(size: 12))
+                    .foregroundColor(Brand.textSecondary)
                 TextField("e.g. Novel, Short Story, Screenplay", text: $medium)
                     .textFieldStyle(.roundedBorder)
             }
 
             VStack(alignment: .leading, spacing: 4) {
                 Text("Working Description")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
+                    .font(.system(size: 12))
+                    .foregroundColor(Brand.textSecondary)
                 TextEditor(text: $workingDescription)
-                    .font(.body)
+                    .font(.system(size: 13))
                     .frame(height: 80)
-                    .overlay(RoundedRectangle(cornerRadius: 4).stroke(Color.secondary.opacity(0.3)))
+                    .overlay(RoundedRectangle(cornerRadius: Brand.radiusSm).stroke(Brand.border, lineWidth: 0.5))
             }
 
             VStack(alignment: .leading, spacing: 4) {
                 Text("Intent")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
+                    .font(.system(size: 12))
+                    .foregroundColor(Brand.textSecondary)
                 TextEditor(text: $intent)
-                    .font(.body)
+                    .font(.system(size: 13))
                     .frame(height: 80)
-                    .overlay(RoundedRectangle(cornerRadius: 4).stroke(Color.secondary.opacity(0.3)))
+                    .overlay(RoundedRectangle(cornerRadius: Brand.radiusSm).stroke(Brand.border, lineWidth: 0.5))
             }
 
             HStack {
@@ -505,15 +456,15 @@ struct SetTargetSheet: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text("Set Target Word Count")
-                .font(.headline)
+                .font(.system(size: 18, weight: .semibold))
             Text(title)
-                .font(.subheadline)
+                .font(.system(size: 15, weight: .medium))
                 .foregroundColor(Brand.textMuted)
 
             VStack(alignment: .leading, spacing: 4) {
                 Text("Target (words)")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
+                    .font(.system(size: 12))
+                    .foregroundColor(Brand.textSecondary)
                 TextField("e.g. 80000", text: $inputText)
                     .textFieldStyle(.roundedBorder)
                     .focused($fieldFocused)
@@ -522,7 +473,7 @@ struct SetTargetSheet: View {
 
             if let c = current {
                 Text("Current target: \(c.formatted()) words")
-                    .font(.caption)
+                    .font(.system(size: 12))
                     .foregroundColor(Brand.textMuted)
             }
 

@@ -30,6 +30,9 @@ enum Brand {
     static let accentLight   = Color(hex: "2DC490")  // icon gradient top
     static let accentDim     = Color(hex: "E4F2EE")  // teal-50 — tinted well
 
+    // MARK: - Interactive states
+    static let surfaceSelected = Color(hex: "EDE4D0")  // active tab / selected item bg
+
     // MARK: - Radii (as CGFloat for use with .cornerRadius / clipShape)
     static let radiusSm: CGFloat =   3
     static let radiusMd: CGFloat =   6

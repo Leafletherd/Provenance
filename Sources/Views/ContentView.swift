@@ -45,6 +45,20 @@ struct ContentView: View {
                 }
             }
         }
+        // App-level toolbar — always visible regardless of which pane is active.
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Button {
+                    NotificationCenter.default.post(name: .connectProjectRequested, object: nil)
+                } label: {
+                    Image(systemName: "plus.circle")
+                        .font(.system(size: 14))
+                        .foregroundColor(Brand.textSecondary)
+                }
+                .buttonStyle(.borderless)
+                .help("Connect Project\u{2026}")
+            }
+        }
         // provenance://open?path=… for a folder not yet connected
         .alert("Connect Project?", isPresented: Binding(
             get:  { appState.pendingConnectURL != nil },

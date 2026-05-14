@@ -255,12 +255,12 @@ struct ProjectRowView: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(state.project.name)
-                    .font(.headline)
+                    .font(.system(size: 15, weight: .medium))
                     .lineLimit(1)
                     .foregroundColor(isMissing ? Brand.textMuted : Brand.textPrimary)
 
                 Text(state.project.folderURL.lastPathComponent)
-                    .font(.caption)
+                    .font(.system(size: 12))
                     .foregroundColor(Brand.textMuted)
                     .lineLimit(1)
 
@@ -269,10 +269,6 @@ struct ProjectRowView: View {
                         .font(.caption2.italic())
                         .foregroundColor(Brand.textMuted)
                         .lineLimit(1)
-                } else {
-                    Text(state.project.lastActivity, style: .relative)
-                        .font(.caption2)
-                        .foregroundColor(.secondary)
                 }
             }
         }
@@ -292,7 +288,7 @@ struct RenameProjectSheet: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text("Rename Project")
-                .font(.headline)
+                .font(.system(size: 18, weight: .semibold))
 
             TextField("Display name", text: $text)
                 .textFieldStyle(.roundedBorder)

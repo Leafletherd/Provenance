@@ -29,10 +29,10 @@ struct HomeView: View {
                 .foregroundColor(Brand.textMuted)
             VStack(spacing: Brand.spaceSM) {
                 Text("Welcome to Provenance.")
-                    .font(.title2.bold())
+                    .font(.system(size: 22, weight: .bold))
                     .foregroundColor(Brand.textPrimary)
                 Text("Connect a project folder to start tracking\nyour creative history.")
-                    .font(.body)
+                    .font(.system(size: 13))
                     .foregroundColor(Brand.textSecondary)
                     .multilineTextAlignment(.center)
             }
@@ -53,19 +53,24 @@ struct HomeView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: Brand.spaceXL) {
 
-                // Greeting + prompt
-                VStack(alignment: .leading, spacing: Brand.spaceSM) {
-                    Text(greeting)
-                        .font(.system(size: 22, weight: .bold))
-                        .foregroundColor(Brand.textPrimary)
+                // Greeting — left-aligned
+                Text(greeting)
+                    .font(.system(size: 22, weight: .bold))
+                    .foregroundColor(Brand.textPrimary)
 
-                    Text(contextualPrompt)
-                        .font(.system(size: 18, weight: .regular))
-                        .foregroundColor(Brand.textSecondary)
+                // Prompt + composer — horizontally centered, max 560pt
+                HStack(spacing: 0) {
+                    Spacer(minLength: 0)
+                    VStack(alignment: .leading, spacing: Brand.spaceMD) {
+                        Text(contextualPrompt)
+                            .font(.system(size: 15, weight: .medium))
+                            .foregroundColor(Brand.textSecondary)
+
+                        composerSection
+                    }
+                    .frame(maxWidth: 560)
+                    Spacer(minLength: 0)
                 }
-
-                // Check-in composer
-                composerSection
 
                 Divider()
                     .overlay(Brand.border)
@@ -83,7 +88,6 @@ struct HomeView: View {
         }
         .background(Brand.surfaceBase)
         .onAppear {
-            // Default target project = contextual project, or first project
             if targetProjectID == nil {
                 targetProjectID = contextualProject?.project.id
                     ?? appState.projectStates.first?.project.id
@@ -97,7 +101,6 @@ struct HomeView: View {
         VStack(alignment: .leading, spacing: Brand.spaceMD) {
             // Project picker + status row
             HStack(spacing: Brand.spaceSM) {
-                // Project picker
                 Menu {
                     ForEach(appState.projectStates) { state in
                         Button(state.project.name) {
@@ -125,7 +128,6 @@ struct HomeView: View {
                 .menuStyle(.borderlessButton)
                 .fixedSize()
 
-                // Status chips
                 HStack(spacing: 4) {
                     ForEach(CheckInStatus.allCases, id: \.self) { status in
                         StatusChip(status: status, isSelected: checkInStatus == status) {
@@ -136,7 +138,6 @@ struct HomeView: View {
 
                 Spacer()
 
-                // Save button
                 Button {
                     saveCheckIn()
                 } label: {
@@ -159,15 +160,15 @@ struct HomeView: View {
             // Text input
             ZStack(alignment: .topLeading) {
                 if checkInText.isEmpty {
-                    Text("What did you work on? How does it feel?")
-                        .font(.system(size: 14))
+                    Text("Ready to check in? Type a sentence or two.")
+                        .font(.system(size: 13).italic())
                         .foregroundColor(Brand.textMuted)
                         .padding(.horizontal, 6)
                         .padding(.vertical, 8)
                         .allowsHitTesting(false)
                 }
                 TextEditor(text: $checkInText)
-                    .font(.system(size: 14))
+                    .font(.system(size: 13))
                     .scrollContentBackground(.hidden)
                     .padding(.horizontal, 4)
                     .padding(.vertical, 4)
@@ -195,14 +196,22 @@ struct HomeView: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: Brand.spaceMD) {
                     ForEach(appState.projectStates) { state in
-                        ProjectHomeCard(state: state)
-                            .onTapGesture {
+                        ProjectHomeCard(
+                            state: state,
+                            isSelected: targetProjectID == state.project.id,
+                            onSelect: {
+                                // Single-click: set as the check-in target
+                                targetProjectID = state.project.id
+                            },
+                            onOpen: {
+                                // Open button: navigate into the project's tabs
                                 appState.isHomeSelected = false
                                 appState.selectedProjectID = state.project.id
                             }
+                        )
                     }
                 }
-                .padding(.bottom, 2) // room for card shadow border
+                .padding(.bottom, 2)
             }
         }
     }
@@ -242,9 +251,11 @@ struct HomeView: View {
             }
     }
 
+    /// Reflects whichever project is currently selected as the check-in target.
     private var contextualPrompt: String {
-        if let proj = contextualProject {
-            return "How\u{2019}s \(proj.project.name) going?"
+        if let id = targetProjectID,
+           let state = appState.projectStates.first(where: { $0.project.id == id }) {
+            return "How\u{2019}s \(state.project.name) going?"
         }
         return "What are you working on?"
     }
@@ -286,10 +297,6 @@ struct HomeView: View {
         checkInText = ""
         isSaving = false
         savedFeedback = true
-
-        // Re-default project to contextual on next open
-        targetProjectID = contextualProject?.project.id
-            ?? appState.projectStates.first?.project.id
 
         Task {
             try? await Task.sleep(nanoseconds: 1_500_000_000)
@@ -337,10 +344,13 @@ private struct StatusChip: View {
 
 private struct ProjectHomeCard: View {
     @ObservedObject var state: ProjectState
+    let isSelected: Bool
+    let onSelect: () -> Void
+    let onOpen: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: Brand.spaceSM) {
-            // Header: name + status dot
+            // Header: name + status dot + open chevron
             HStack(spacing: 6) {
                 Circle()
                     .fill(state.isWatching ? Brand.accent : Brand.textMuted)
@@ -349,6 +359,15 @@ private struct ProjectHomeCard: View {
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundColor(Brand.textPrimary)
                     .lineLimit(1)
+                Spacer(minLength: 0)
+                // Open button — navigates into the project's tab view
+                Button(action: onOpen) {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 9, weight: .medium))
+                        .foregroundColor(Brand.textMuted)
+                }
+                .buttonStyle(.plain)
+                .help("Open project")
             }
 
             // Sparkline or placeholder
@@ -370,21 +389,20 @@ private struct ProjectHomeCard: View {
                 CardStat(value: state.snapshots.count, label: "snaps")
                 CardStat(value: state.sources.count, label: "sources")
             }
-
-            // Last activity
-            Text(state.project.lastActivity, style: .relative)
-                .font(.caption2)
-                .foregroundColor(Brand.textMuted)
         }
         .padding(Brand.spaceMD)
         .frame(width: 200, height: 120, alignment: .topLeading)
         .background(Brand.surfaceRaised)
         .overlay(
             RoundedRectangle(cornerRadius: Brand.radiusLg)
-                .stroke(Brand.border, lineWidth: 0.5)
+                .stroke(
+                    isSelected ? Brand.accent.opacity(0.6) : Brand.border,
+                    lineWidth: isSelected ? 1.5 : 0.5
+                )
         )
         .cornerRadius(Brand.radiusLg)
         .contentShape(Rectangle())
+        .onTapGesture { onSelect() }
     }
 }
 
@@ -413,7 +431,7 @@ private struct HomeStatView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
             Text("\(value)")
-                .font(.system(size: 28, weight: .bold))
+                .font(.system(size: 22, weight: .bold))
                 .foregroundColor(Brand.textPrimary)
             Text(label)
                 .font(.system(size: 12))

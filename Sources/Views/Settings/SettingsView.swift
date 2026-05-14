@@ -46,7 +46,7 @@ struct SettingsView: View {
             // MARK: Privacy
             settingSection(
                 title: "Privacy",
-                description: "When enabled, Provenance silently monitors the clipboard and records where pasted text came from — source URL, app, or AI tool. No content is stored: only a 64-character preview and a SHA-256 hash. Per-project overrides are available in each project's Overview tab."
+                description: "When enabled, Provenance silently monitors the clipboard and records where pasted text came from — source URL, app, or AI tool. No content is stored: only a 64-character preview and a SHA-256 hash."
             ) {
                 Toggle("Track paste sources", isOn: $trackPasteSources)
                     .toggleStyle(.switch)
