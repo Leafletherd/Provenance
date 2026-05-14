@@ -119,7 +119,7 @@ class AppState: ObservableObject {
             store.update(updated)
             selectedProjectID = updated.id
             isHomeSelected = false
-            showToast("Updated location for \u{201C}\(updated.name)\u{201D}.")
+            showToast("Updated location for \u{201C}\(updated.name)\u{201D} \u{2014} was already tracked under this project ID.")
             return
         }
 

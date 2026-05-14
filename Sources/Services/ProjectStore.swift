@@ -45,6 +45,7 @@ class ProjectStore: ObservableObject {
         guard let data = UserDefaults.standard.data(forKey: key) else { return }
         projects = (try? JSONDecoder().decode([Project].self, from: data)) ?? []
         migrateLegacyFields()
+        deduplicateIfNeeded()
     }
 
     /// PR-10 migration: create NSURL bookmarks for any project that lacks one,
@@ -70,6 +71,68 @@ class ProjectStore: ObservableObject {
         // ensuring stability across subsequent launches.
         if !projects.isEmpty { dirty = true }
         if dirty { save() }
+    }
+
+    // MARK: - Deduplication (PR-11)
+
+    /// Groups projects by `projectId`. When multiple entries share the same ID
+    /// (e.g. iCloud sync showing the same folder under two paths), keep the best
+    /// one and discard the rest from the in-memory + persistent store.
+    ///
+    /// "Discard" means removed from the store array — it does NOT delete any
+    /// `.ledger/` directory on disk.
+    ///
+    /// Logs a single `projectsDeduplicated` ledger event per group that needed
+    /// cleaning. Idempotent; no-op when there are no duplicates.
+    private func deduplicateIfNeeded() {
+        // Group indices by projectId
+        var byId: [String: [Int]] = [:]
+        for (i, p) in projects.enumerated() {
+            byId[p.projectId, default: []].append(i)
+        }
+
+        var indicesToRemove: [Int] = []
+
+        for (projectId, indices) in byId where indices.count > 1 {
+            let group = indices.map { projects[$0] }
+            let best  = pickBest(from: group)
+            let discardedCount = group.count - 1
+
+            // Collect indices of all entries that are NOT the best one
+            for idx in indices where projects[idx].id != best.id {
+                indicesToRemove.append(idx)
+            }
+
+            // Log one event on the kept project's ledger
+            LedgerWriter.appendEvent(
+                type: .projectsDeduplicated,
+                detail: "Removed \(discardedCount) duplicate project \(discardedCount == 1 ? "entry" : "entries") (kept projectId \(projectId)).",
+                to: best
+            )
+        }
+
+        guard !indicesToRemove.isEmpty else { return }
+
+        let removeSet = Set(indicesToRemove)
+        projects = projects.enumerated()
+            .filter { !removeSet.contains($0.offset) }
+            .map(\.element)
+        save()
+    }
+
+    /// Picks the best project from a duplicate group.
+    ///
+    /// Priority:
+    ///   1. Entries whose folder path currently exists on disk.
+    ///   2. Among those (or among all, if none exist), the most recent `lastActivity`.
+    private func pickBest(from group: [Project]) -> Project {
+        let fm = FileManager.default
+        let resolving = group.filter {
+            var isDir: ObjCBool = false
+            return fm.fileExists(atPath: $0.folderURL.path, isDirectory: &isDir) && isDir.boolValue
+        }
+        let candidates = resolving.isEmpty ? group : resolving
+        return candidates.max(by: { $0.lastActivity < $1.lastActivity }) ?? group[0]
     }
 
     private func save() {
