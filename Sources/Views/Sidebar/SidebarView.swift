@@ -5,84 +5,82 @@ extension Notification.Name {
     static let connectProjectRequested = Notification.Name("connectProjectRequested")
 }
 
+// MARK: - Sidebar selection model
+
+enum SidebarItem: Hashable {
+    case home
+    case project(UUID)
+}
+
 struct SidebarView: View {
     @EnvironmentObject var appState: AppState
     @State private var showRemoveAlert = false
     @State private var projectToRemove: UUID? = nil
+    @State private var renameProjectID: UUID? = nil
+    @State private var renameText: String = ""
+
+    // Computed binding that maps isHomeSelected + selectedProjectID → SidebarItem
+    private var selectionBinding: Binding<SidebarItem?> {
+        Binding(
+            get: {
+                if appState.isHomeSelected { return .home }
+                if let id = appState.selectedProjectID { return .project(id) }
+                return .home
+            },
+            set: { item in
+                switch item {
+                case .home, .none:
+                    appState.isHomeSelected = true
+                    appState.selectedProjectID = nil
+                case .project(let id):
+                    appState.isHomeSelected = false
+                    appState.selectedProjectID = id
+                }
+            }
+        )
+    }
 
     var body: some View {
         VStack(spacing: 0) {
-            if appState.projectStates.isEmpty {
-                emptyState
-            } else {
-                projectList
-            }
-        }
-        .navigationTitle("Provenance")
-        .onReceive(NotificationCenter.default.publisher(for: .connectProjectRequested)) { _ in
-            openFolderPicker()
-        }
-        .alert("Disconnect Project?", isPresented: $showRemoveAlert) {
-            Button("Disconnect", role: .destructive) {
-                if let id = projectToRemove {
-                    appState.removeProject(id: id)
+            List(selection: selectionBinding) {
+                // Home row
+                Label {
+                    Text("Home")
+                        .font(.system(size: 15, weight: .medium))
+                } icon: {
+                    Image(systemName: "house")
+                        .font(.system(size: 12))
                 }
-                projectToRemove = nil
-            }
-            Button("Cancel", role: .cancel) {
-                projectToRemove = nil
-            }
-        } message: {
-            Text("This will disconnect the project from Provenance. Your files and .ledger folder will not be deleted.")
-        }
-    }
+                .tag(SidebarItem.home)
 
-    // MARK: - Empty state
-
-    private var emptyState: some View {
-        VStack(spacing: 20) {
-            Spacer()
-            Image(systemName: "folder.badge.plus")
-                .font(.system(size: 44))
-                .foregroundColor(.secondary)
-            VStack(spacing: 6) {
-                Text("No Projects")
-                    .font(.headline)
-                Text("Connect a folder to start tracking its writing history.")
-                    .font(.callout)
-                    .foregroundColor(.secondary)
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal, 24)
-            }
-            Button("Connect Project Folder…") {
-                openFolderPicker()
-            }
-            .buttonStyle(.borderedProminent)
-            .controlSize(.large)
-            Spacer()
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
-
-    // MARK: - Project list
-
-    private var projectList: some View {
-        List(selection: Binding(
-            get: { appState.selectedProjectID },
-            set: { appState.selectedProjectID = $0 }
-        )) {
-            ForEach(appState.projectStates) { state in
-                ProjectRowView(state: state)
-                    .tag(state.project.id)
-                    .contextMenu {
-                        Button("Disconnect Project", role: .destructive) {
-                            projectToRemove = state.project.id
-                            showRemoveAlert = true
+                if !appState.projectStates.isEmpty {
+                    Section("Projects") {
+                        ForEach(appState.projectStates) { state in
+                            ProjectRowView(state: state)
+                                .tag(SidebarItem.project(state.project.id))
+                                .contextMenu {
+                                    Button("Reveal in Finder") {
+                                        NSWorkspace.shared.activateFileViewerSelecting(
+                                            [state.project.folderURL]
+                                        )
+                                    }
+                                    Button("Rename\u{2026}") {
+                                        renameText = state.project.name
+                                        renameProjectID = state.project.id
+                                    }
+                                    Divider()
+                                    Button("Disconnect Project", role: .destructive) {
+                                        projectToRemove = state.project.id
+                                        showRemoveAlert = true
+                                    }
+                                }
                         }
                     }
+                }
             }
+            .listStyle(.sidebar)
         }
-        .listStyle(.sidebar)
+        .navigationTitle("Provenance")
         .safeAreaInset(edge: .bottom) {
             HStack(spacing: 4) {
                 Button {
@@ -102,7 +100,7 @@ struct SidebarView: View {
                     Image(systemName: "minus")
                 }
                 .buttonStyle(.borderless)
-                .disabled(appState.selectedProjectID == nil)
+                .disabled(appState.isHomeSelected || appState.selectedProjectID == nil)
                 .help("Disconnect selected project")
 
                 Spacer()
@@ -110,6 +108,42 @@ struct SidebarView: View {
             .padding(.horizontal, 10)
             .padding(.vertical, 6)
             .background(.bar)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .connectProjectRequested)) { _ in
+            openFolderPicker()
+        }
+        .alert("Disconnect Project?", isPresented: $showRemoveAlert) {
+            Button("Disconnect", role: .destructive) {
+                if let id = projectToRemove {
+                    appState.removeProject(id: id)
+                }
+                projectToRemove = nil
+            }
+            Button("Cancel", role: .cancel) {
+                projectToRemove = nil
+            }
+        } message: {
+            Text("This will disconnect the project from Provenance. Your files and .ledger folder will not be deleted.")
+        }
+        .sheet(isPresented: Binding(
+            get: { renameProjectID != nil },
+            set: { if !$0 { renameProjectID = nil } }
+        )) {
+            RenameProjectSheet(text: $renameText) {
+                if let id = renameProjectID {
+                    if let state = appState.projectStates.first(where: { $0.project.id == id }) {
+                        var updated = state.project
+                        updated.name = renameText.trimmingCharacters(in: .whitespaces)
+                        if !updated.name.isEmpty {
+                            state.updateProject(updated)
+                            appState.updateProject(updated)
+                        }
+                    }
+                }
+                renameProjectID = nil
+            } onCancel: {
+                renameProjectID = nil
+            }
         }
     }
 
@@ -133,7 +167,7 @@ struct SidebarView: View {
     }
 }
 
-// MARK: - Row
+// MARK: - Project row
 
 struct ProjectRowView: View {
     @ObservedObject var state: ProjectState
@@ -160,5 +194,40 @@ struct ProjectRowView: View {
             }
         }
         .padding(.vertical, 4)
+    }
+}
+
+// MARK: - Rename sheet
+
+struct RenameProjectSheet: View {
+    @Binding var text: String
+    let onSave: () -> Void
+    let onCancel: () -> Void
+
+    @FocusState private var focused: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Rename Project")
+                .font(.headline)
+
+            TextField("Display name", text: $text)
+                .textFieldStyle(.roundedBorder)
+                .focused($focused)
+                .onSubmit { if !text.trimmingCharacters(in: .whitespaces).isEmpty { onSave() } }
+
+            HStack {
+                Spacer()
+                Button("Cancel", action: onCancel)
+                    .keyboardShortcut(.cancelAction)
+                Button("Rename") { onSave() }
+                    .buttonStyle(.borderedProminent)
+                    .keyboardShortcut(.defaultAction)
+                    .disabled(text.trimmingCharacters(in: .whitespaces).isEmpty)
+            }
+        }
+        .padding(20)
+        .frame(width: 300)
+        .onAppear { focused = true }
     }
 }

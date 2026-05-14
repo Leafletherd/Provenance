@@ -11,6 +11,8 @@ enum DeepLinkAction: Equatable {
 class AppState: ObservableObject {
     @Published var projectStates: [ProjectState] = []
     @Published var selectedProjectID: UUID? = nil
+    /// True when the Home row is selected in the sidebar (default at launch).
+    @Published var isHomeSelected: Bool = true
     /// Set when `provenance://open?path=` points to an unconnected folder.
     /// The UI observes this and offers a "Connect" confirmation.
     @Published var pendingConnectURL: URL? = nil
@@ -36,7 +38,9 @@ class AppState: ObservableObject {
             projectStates.append(state)
             checkForFolderMove(state: state)
         }
-        selectedProjectID = projectStates.first?.project.id
+        // Home is the default landing; no project pre-selected.
+        selectedProjectID = nil
+        isHomeSelected = true
 
         // Start the global pasteboard observer if paste tracking is globally enabled.
         let globalTracking = UserDefaults.standard.object(forKey: "trackPasteSources") as? Bool ?? true
@@ -76,6 +80,7 @@ class AppState: ObservableObject {
         state.startWatching()
         projectStates.append(state)
         selectedProjectID = project.id
+        isHomeSelected = false
 
         // Git init runs shell subprocesses — must be off the main thread
         Task.detached(priority: .background) { [state] in
@@ -103,7 +108,13 @@ class AppState: ObservableObject {
         projectStates.removeAll { $0.project.id == id }
         store.remove(id: id)
         if selectedProjectID == id {
-            selectedProjectID = projectStates.first?.project.id
+            if let next = projectStates.first?.project.id {
+                selectedProjectID = next
+                isHomeSelected = false
+            } else {
+                selectedProjectID = nil
+                isHomeSelected = true
+            }
         }
     }
 
@@ -149,6 +160,7 @@ class AppState: ObservableObject {
             let folderURL = URL(fileURLWithPath: pathStr)
             if let existing = projectStates.first(where: { $0.project.folderURL == folderURL }) {
                 selectedProjectID = existing.project.id
+                isHomeSelected = false
                 NSApp.activate(ignoringOtherApps: true)
             } else {
                 pendingConnectURL = folderURL
@@ -168,6 +180,7 @@ class AppState: ObservableObject {
                 fileURL.path == $0.project.folderURL.path
             }) {
                 selectedProjectID = state.project.id
+                isHomeSelected    = false
                 pendingDeepLink   = .selectTab(projectID: state.project.id, tab: tab)
                 NSApp.activate(ignoringOtherApps: true)
             }

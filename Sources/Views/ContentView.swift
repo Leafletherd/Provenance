@@ -8,12 +8,16 @@ struct ContentView: View {
             SidebarView()
                 .environmentObject(appState)
         } detail: {
-            if let state = appState.selectedState {
+            if appState.isHomeSelected || appState.selectedProjectID == nil {
+                HomeView()
+                    .environmentObject(appState)
+            } else if let state = appState.selectedState {
                 ProjectView(state: state)
                     .environmentObject(appState)
                     .id(state.project.id)
             } else {
-                EmptyStateView(message: "Select or connect a project")
+                HomeView()
+                    .environmentObject(appState)
             }
         }
         // provenance://open?path=… for a folder not yet connected

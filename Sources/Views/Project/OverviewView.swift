@@ -25,12 +25,12 @@ struct OverviewView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
 
-                // Project name
+                // Display name
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("Project Name")
+                    Text("Display Name")
                         .font(.caption)
                         .foregroundColor(.secondary)
-                    TextField("Project name", text: $projectName)
+                    TextField("Display name", text: $projectName)
                         .font(.title2)
                         .textFieldStyle(.plain)
                         .onChange(of: projectName) { newValue in
@@ -45,6 +45,9 @@ struct OverviewView: View {
                                 }
                             }
                         }
+                    Text("Used everywhere this project appears, including when promoted to Works.")
+                        .font(.system(size: 11))
+                        .foregroundColor(Brand.textMuted)
                 }
 
                 Divider()
