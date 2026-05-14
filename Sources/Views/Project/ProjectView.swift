@@ -8,13 +8,13 @@ enum ProjectTab: String, CaseIterable {
     case versions = "Versions"
     case checkins = "Check-ins"
     case ledger = "Ledger"
+    case export = "Export"
 }
 
 struct ProjectView: View {
     @ObservedObject var state: ProjectState
     @EnvironmentObject var appState: AppState
     @State private var selectedTab: ProjectTab = .overview
-    @State private var showExportSheet = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -40,16 +40,6 @@ struct ProjectView: View {
                     .buttonStyle(.plain)
                 }
                 Spacer()
-
-                Button {
-                    showExportSheet = true
-                } label: {
-                    Label("Export\u{2026}", systemImage: "arrow.up.doc")
-                }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.small)
-                .keyboardShortcut("e", modifiers: [.command, .shift])
-                .padding(.trailing, 8)
             }
             .padding(.horizontal, 12)
             .padding(.top, 8)
@@ -73,12 +63,11 @@ struct ProjectView: View {
                     CheckInsView(state: state)
                 case .ledger:
                     LedgerView(state: state)
+                case .export:
+                    ExportView(state: state)
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-        }
-        .sheet(isPresented: $showExportSheet) {
-            ExportSheet(state: state, isPresented: $showExportSheet)
         }
         // provenance://reveal?path=…&tab=<tab> — switch to the requested tab.
         .onChange(of: appState.pendingDeepLink) { link in

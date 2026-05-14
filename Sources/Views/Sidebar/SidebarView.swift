@@ -18,6 +18,9 @@ struct SidebarView: View {
     @State private var projectToRemove: UUID? = nil
     @State private var renameProjectID: UUID? = nil
     @State private var renameText: String = ""
+    @State private var promoteState: ProjectState? = nil
+    @State private var isPromoting = false
+    @State private var showPromoteSheet = false
 
     // Computed binding that maps isHomeSelected + selectedProjectID → SidebarItem
     private var selectionBinding: Binding<SidebarItem?> {
@@ -67,6 +70,10 @@ struct SidebarView: View {
                                     Button("Rename\u{2026}") {
                                         renameText = state.project.name
                                         renameProjectID = state.project.id
+                                    }
+                                    Button("Promote to Works\u{2026}") {
+                                        promoteState = state
+                                        showPromoteSheet = true
                                     }
                                     Divider()
                                     Button("Disconnect Project", role: .destructive) {
@@ -143,6 +150,25 @@ struct SidebarView: View {
                 renameProjectID = nil
             } onCancel: {
                 renameProjectID = nil
+            }
+        }
+        .sheet(isPresented: $showPromoteSheet) {
+            if let ps = promoteState {
+                PromoteConfirmSheet(
+                    projectName: ps.project.name,
+                    checkInCount: ps.checkIns.filter { $0.exportIncluded }.count,
+                    sourceCount:  ps.sources.filter  { $0.exportIncluded }.count,
+                    artifactCount: ps.artifacts.filter { $0.exportIncluded }.count
+                ) {
+                    showPromoteSheet = false
+                    isPromoting = true
+                    Task {
+                        _ = try? await PromotionService.promote(state: ps)
+                        await MainActor.run { isPromoting = false }
+                    }
+                } onCancel: {
+                    showPromoteSheet = false
+                }
             }
         }
     }

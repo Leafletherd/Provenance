@@ -1,0 +1,494 @@
+import SwiftUI
+import AppKit
+
+// MARK: - Export format
+
+enum ExportFormat: String, CaseIterable {
+    case pdf      = "pdf"
+    case bundle   = "bundle"
+    case markdown = "markdown"
+
+    var label: String {
+        switch self {
+        case .pdf:      return "PDF Report"
+        case .bundle:   return "Bundle for Works"
+        case .markdown: return "Markdown"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .pdf:      return "doc.richtext"
+        case .bundle:   return "shippingbox"
+        case .markdown: return "doc.plaintext"
+        }
+    }
+
+    /// One-line description shown under the picker.
+    var shortDescription: String {
+        switch self {
+        case .pdf:
+            return "A printable report of your project\u{2019}s check-ins, sources, artifacts, and recent snapshots."
+        case .bundle:
+            return "A structured handoff for Works. Writes .provenance.bundle/ at the project root."
+        case .markdown:
+            return "A single .md file containing the project\u{2019}s metadata, check-ins, sources, and artifact list."
+        }
+    }
+
+    /// Output path hint shown in the post-export confirmation.
+    func destinationHint(projectName: String) -> String {
+        switch self {
+        case .pdf:      return ".ledger/export/\(projectName.replacingOccurrences(of: " ", with: "_"))-provenance-…pdf"
+        case .bundle:   return ".provenance.bundle/"
+        case .markdown: return ".ledger/export/\(projectName.replacingOccurrences(of: " ", with: "_"))-provenance-….md"
+        }
+    }
+}
+
+// MARK: - Recent export record
+
+struct RecentExport: Codable, Identifiable {
+    let id: UUID
+    let format: String          // ExportFormat.rawValue
+    let filename: String
+    let date: Date
+    let outputPath: String      // absolute path for Reveal in Finder
+}
+
+// MARK: - Export view
+
+struct ExportView: View {
+    @ObservedObject var state: ProjectState
+
+    @State private var selectedFormat: ExportFormat = .pdf
+    @State private var isExporting = false
+    @State private var exportConfirmation: String? = nil
+    @State private var exportError: String? = nil
+    @State private var recentExports: [RecentExport] = []
+
+    // Promotion
+    @State private var showPromoteSheet = false
+    @State private var isPromoting = false
+    @State private var promoteConfirmation: String? = nil
+    @State private var promoteError: String? = nil
+
+    // Counts
+    private var includedCheckIns: Int  { state.checkIns.filter  { $0.exportIncluded }.count }
+    private var totalCheckIns: Int     { state.checkIns.count }
+    private var includedSources: Int   { state.sources.filter   { $0.exportIncluded }.count }
+    private var totalSources: Int      { state.sources.count }
+    private var includedArtifacts: Int { state.artifacts.filter { $0.exportIncluded }.count }
+    private var totalArtifacts: Int    { state.artifacts.count }
+
+    private var userDefaultsKey: String { "recentExports_\(state.project.id.uuidString)" }
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: Brand.spaceXL) {
+
+                // ── Format ────────────────────────────────────────────────────
+                sectionHeader("Format")
+
+                VStack(alignment: .leading, spacing: Brand.spaceSM) {
+                    Picker("", selection: $selectedFormat) {
+                        ForEach(ExportFormat.allCases, id: \.self) { fmt in
+                            Text(fmt.label).tag(fmt)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+
+                    Text(selectedFormat.shortDescription)
+                        .font(.system(size: 13))
+                        .foregroundColor(Brand.textSecondary)
+                }
+
+                // ── Will be included ──────────────────────────────────────────
+                sectionHeader("Will be included")
+
+                VStack(alignment: .leading, spacing: Brand.spaceSM) {
+                    includedRow(label: "Check-ins",
+                                included: includedCheckIns, total: totalCheckIns)
+                    includedRow(label: "Sources",
+                                included: includedSources,  total: totalSources)
+                    includedRow(label: "Artifacts",
+                                included: includedArtifacts, total: totalArtifacts)
+
+                    Text("Toggle \u{201C}Include in export\u{201D} on individual items to change.")
+                        .font(.system(size: 11))
+                        .foregroundColor(Brand.textMuted)
+                        .padding(.top, Brand.spaceXS)
+                }
+
+                // ── Export action ─────────────────────────────────────────────
+                VStack(alignment: .leading, spacing: Brand.spaceSM) {
+                    HStack(spacing: Brand.spaceMD) {
+                        Button {
+                            runExport()
+                        } label: {
+                            if isExporting {
+                                HStack(spacing: 6) {
+                                    ProgressView()
+                                        .progressViewStyle(.circular)
+                                        .controlSize(.small)
+                                    Text("Exporting\u{2026}")
+                                }
+                            } else {
+                                Text("Export")
+                            }
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .tint(Brand.accent)
+                        .keyboardShortcut("e", modifiers: .command)
+                        .disabled(isExporting)
+                    }
+
+                    if let confirmation = exportConfirmation {
+                        Label(confirmation, systemImage: "checkmark.circle.fill")
+                            .font(.system(size: 12))
+                            .foregroundColor(Brand.accent)
+                    }
+                    if let err = exportError {
+                        Label(err, systemImage: "exclamationmark.triangle.fill")
+                            .font(.system(size: 12))
+                            .foregroundColor(.red)
+                    }
+                }
+
+                // ── Recent exports ────────────────────────────────────────────
+                sectionHeader("Recent exports")
+
+                if recentExports.isEmpty {
+                    EmptyStateView(message: "No exports yet.")
+                        .frame(height: 60)
+                } else {
+                    VStack(spacing: 6) {
+                        ForEach(recentExports) { export in
+                            RecentExportRow(export: export)
+                        }
+                    }
+                }
+
+                // ── Divider ───────────────────────────────────────────────────
+                Divider()
+                    .overlay(Brand.border)
+                    .padding(.vertical, Brand.spaceSM)
+
+                // ── Promote to Works ──────────────────────────────────────────
+                sectionHeader("Promote to Works")
+
+                VStack(alignment: .leading, spacing: Brand.spaceMD) {
+                    Text("When this project is ready to enter a Works library, promote it here. A bundle will be written and Works will be asked to open with the project pre-filled.")
+                        .font(.system(size: 13))
+                        .foregroundColor(Brand.textSecondary)
+
+                    Button("Promote to Works\u{2026}") {
+                        showPromoteSheet = true
+                    }
+                    .buttonStyle(.bordered)
+                    .disabled(isPromoting)
+
+                    if let confirmation = promoteConfirmation {
+                        Text(confirmation)
+                            .font(.system(size: 12))
+                            .foregroundColor(Brand.accent)
+                    }
+                    if let err = promoteError {
+                        Label(err, systemImage: "exclamationmark.triangle.fill")
+                            .font(.system(size: 12))
+                            .foregroundColor(.red)
+                    }
+                }
+            }
+            .padding(Brand.spaceXL)
+        }
+        .background(Brand.surfaceBase)
+        .onAppear { loadRecentExports() }
+        .sheet(isPresented: $showPromoteSheet) {
+            PromoteConfirmSheet(
+                projectName: state.project.name,
+                checkInCount: includedCheckIns,
+                sourceCount: includedSources,
+                artifactCount: includedArtifacts
+            ) {
+                showPromoteSheet = false
+                runPromote()
+            } onCancel: {
+                showPromoteSheet = false
+            }
+        }
+    }
+
+    // MARK: - Sub-views
+
+    private func sectionHeader(_ title: String) -> some View {
+        Text(title)
+            .font(.system(size: 15, weight: .semibold))
+            .foregroundColor(Brand.textPrimary)
+    }
+
+    private func includedRow(label: String, included: Int, total: Int) -> some View {
+        HStack {
+            Text(label)
+                .font(.system(size: 13))
+                .foregroundColor(Brand.textPrimary)
+            Spacer()
+            Text("\(included) of \(total)")
+                .font(.system(size: 13, weight: .medium))
+                .foregroundColor(Brand.textPrimary)
+            if included < total {
+                Text("\(total - included) hidden")
+                    .font(.system(size: 11))
+                    .foregroundColor(Brand.textMuted)
+            }
+        }
+        .padding(.vertical, 2)
+    }
+
+    // MARK: - Export action
+
+    private func runExport() {
+        isExporting = true
+        exportConfirmation = nil
+        exportError = nil
+
+        let proj  = state.project
+        let cis   = state.checkIns
+        let srcs  = state.sources
+        let arts  = state.artifacts
+        let snaps = state.snapshots
+        let evs   = state.events
+        let fmt   = selectedFormat
+
+        Task {
+            do {
+                switch fmt {
+
+                case .pdf:
+                    let url = try await Task.detached(priority: .userInitiated) {
+                        try ExportService.export(project: proj, checkIns: cis, sources: srcs,
+                                                  artifacts: arts, snapshots: snaps, events: evs)
+                    }.value
+                    await MainActor.run {
+                        isExporting = false
+                        let hint = "Exported to \(url.lastPathComponent)"
+                        exportConfirmation = hint
+                        appendRecentExport(format: fmt, outputURL: url)
+                    }
+
+                case .bundle:
+                    let result = try await Task.detached(priority: .userInitiated) {
+                        try ExportService.exportBundle(project: proj, checkIns: cis,
+                                                       sources: srcs, artifacts: arts)
+                    }.value
+                    await MainActor.run {
+                        let detail = "Bundle exported with \(result.checkInCount) check-in\(result.checkInCount == 1 ? "" : "s"), " +
+                                     "\(result.sourceCount) source\(result.sourceCount == 1 ? "" : "s"), " +
+                                     "\(result.artifactCount) artifact\(result.artifactCount == 1 ? "" : "s")."
+                        LedgerWriter.appendEvent(type: .bundleExported, detail: detail, to: proj)
+                        state.reloadEvents()
+                        isExporting = false
+                        exportConfirmation = "Exported to .provenance.bundle/"
+                        appendRecentExport(format: fmt, outputURL: result.url)
+                    }
+
+                case .markdown:
+                    let url = try await Task.detached(priority: .userInitiated) {
+                        try ExportService.exportMarkdown(project: proj, checkIns: cis,
+                                                         sources: srcs, artifacts: arts,
+                                                         snapshots: snaps, events: evs)
+                    }.value
+                    await MainActor.run {
+                        isExporting = false
+                        exportConfirmation = "Exported to \(url.lastPathComponent)"
+                        appendRecentExport(format: fmt, outputURL: url)
+                    }
+                }
+            } catch {
+                await MainActor.run {
+                    isExporting = false
+                    exportError = error.localizedDescription
+                }
+            }
+        }
+    }
+
+    // MARK: - Promote action
+
+    private func runPromote() {
+        isPromoting = true
+        promoteConfirmation = nil
+        promoteError = nil
+
+        Task {
+            do {
+                _ = try await PromotionService.promote(state: state)
+                await MainActor.run {
+                    isPromoting = false
+                    promoteConfirmation = "Bundle ready. Works will open if installed; otherwise open it manually and add this folder."
+                }
+            } catch {
+                await MainActor.run {
+                    isPromoting = false
+                    promoteError = error.localizedDescription
+                }
+            }
+        }
+    }
+
+    // MARK: - Recent exports persistence
+
+    private func loadRecentExports() {
+        guard let data = UserDefaults.standard.data(forKey: userDefaultsKey),
+              let decoded = try? JSONDecoder().decode([RecentExport].self, from: data)
+        else { return }
+        recentExports = decoded
+    }
+
+    private func appendRecentExport(format: ExportFormat, outputURL: URL) {
+        let entry = RecentExport(
+            id: UUID(),
+            format: format.rawValue,
+            filename: outputURL.lastPathComponent,
+            date: Date(),
+            outputPath: outputURL.path
+        )
+        recentExports.insert(entry, at: 0)
+        if recentExports.count > 5 { recentExports = Array(recentExports.prefix(5)) }
+        if let data = try? JSONEncoder().encode(recentExports) {
+            UserDefaults.standard.set(data, forKey: userDefaultsKey)
+        }
+    }
+}
+
+// MARK: - Recent export row
+
+private struct RecentExportRow: View {
+    let export: RecentExport
+
+    private var formatIcon: String {
+        switch export.format {
+        case "pdf":    return "doc.richtext"
+        case "bundle": return "shippingbox"
+        default:       return "doc.plaintext"
+        }
+    }
+
+    private var displayFmt: DateFormatter {
+        let f = DateFormatter()
+        f.dateStyle = .short
+        f.timeStyle = .short
+        return f
+    }
+
+    var body: some View {
+        HStack(spacing: Brand.spaceSM) {
+            Image(systemName: formatIcon)
+                .font(.system(size: 13))
+                .foregroundColor(Brand.accent)
+                .frame(width: 18)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(export.filename)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(Brand.textPrimary)
+                    .lineLimit(1)
+                Text(displayFmt.string(from: export.date))
+                    .font(.system(size: 11))
+                    .foregroundColor(Brand.textMuted)
+            }
+
+            Spacer()
+
+            HStack(spacing: Brand.spaceXS) {
+                Button("Reveal") {
+                    let url = URL(fileURLWithPath: export.outputPath)
+                    NSWorkspace.shared.activateFileViewerSelecting([url])
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.mini)
+
+                Button("Open") {
+                    NSWorkspace.shared.open(URL(fileURLWithPath: export.outputPath))
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.mini)
+            }
+        }
+        .padding(Brand.spaceSM)
+        .background(Brand.surfaceSunken.opacity(0.5))
+        .overlay(
+            RoundedRectangle(cornerRadius: Brand.radiusMd)
+                .stroke(Brand.border, lineWidth: 0.5)
+        )
+        .cornerRadius(Brand.radiusMd)
+    }
+}
+
+// MARK: - Stat pill (kept for compatibility with ExportSheet usages)
+
+struct ExportStatPill: View {
+    let count: Int
+    let label: String
+
+    var body: some View {
+        HStack(spacing: 3) {
+            Text("\(count)")
+                .font(.system(size: 12, weight: .bold))
+                .foregroundColor(Brand.textPrimary)
+            Text(label)
+                .font(.system(size: 11))
+                .foregroundColor(Brand.textMuted)
+        }
+    }
+}
+
+// MARK: - Promote confirmation sheet
+
+struct PromoteConfirmSheet: View {
+    let projectName: String
+    let checkInCount: Int
+    let sourceCount: Int
+    let artifactCount: Int
+    let onPromote: () -> Void
+    let onCancel: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Brand.spaceLG) {
+            Text("Promote to Works")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundColor(Brand.textPrimary)
+
+            Text("A Provenance bundle will be written to this project\u{2019}s folder. Works will open with this project ready to add to a library.")
+                .font(.system(size: 13))
+                .foregroundColor(Brand.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            Text("Will include \(checkInCount) check-in\(checkInCount == 1 ? "" : "s"), \(sourceCount) source\(sourceCount == 1 ? "" : "s"), \(artifactCount) artifact\(artifactCount == 1 ? "" : "s").")
+                .font(.system(size: 13))
+                .foregroundColor(Brand.textPrimary)
+                .padding(Brand.spaceSM)
+                .background(Brand.surfaceSunken)
+                .overlay(
+                    RoundedRectangle(cornerRadius: Brand.radiusMd)
+                        .stroke(Brand.border, lineWidth: 0.5)
+                )
+                .cornerRadius(Brand.radiusMd)
+
+            HStack {
+                Spacer()
+                Button("Cancel", action: onCancel)
+                    .buttonStyle(.bordered)
+                    .keyboardShortcut(.cancelAction)
+                Button("Promote") { onPromote() }
+                    .buttonStyle(.borderedProminent)
+                    .tint(Brand.accent)
+                    .keyboardShortcut(.defaultAction)
+            }
+        }
+        .padding(Brand.spaceXL)
+        .frame(width: 480)
+        .background(Brand.surfaceBase)
+    }
+}

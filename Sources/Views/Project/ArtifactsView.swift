@@ -136,16 +136,17 @@ struct ArtifactCardView: View {
                     .lineLimit(2)
             }
 
-            Toggle("Export", isOn: Binding(
+            Toggle("Include in export", isOn: Binding(
                 get: { artifact.exportIncluded },
                 set: { newVal in
-                    var updated = artifact
-                    updated = Artifact(
-                        id: artifact.id, timestamp: artifact.timestamp, type: artifact.type,
-                        title: artifact.title, attachmentFilename: artifact.attachmentFilename,
-                        caption: artifact.caption, exportIncluded: newVal
-                    )
-                    state.updateArtifact(updated)
+                    if let idx = state.artifacts.firstIndex(where: { $0.id == artifact.id }) {
+                        state.artifacts[idx] = Artifact(
+                            id: artifact.id, timestamp: artifact.timestamp, type: artifact.type,
+                            title: artifact.title, attachmentFilename: artifact.attachmentFilename,
+                            caption: artifact.caption, exportIncluded: newVal
+                        )
+                        try? LedgerWriter.writeArtifacts(state.artifacts, to: state.project)
+                    }
                 }
             ))
             .toggleStyle(.checkbox)
