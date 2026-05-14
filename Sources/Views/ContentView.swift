@@ -27,7 +27,7 @@ struct ContentView: View {
         )) {
             Button("Connect") {
                 if let url = appState.pendingConnectURL {
-                    appState.connectProject(at: url)
+                    try? appState.connectProject(at: url)
                 }
                 appState.pendingConnectURL = nil
             }

@@ -51,13 +51,20 @@ class AppState: ObservableObject {
 
     // MARK: - Connect Project
 
-    func connectProject(at url: URL) {
+    /// Connect a project folder. `displayName` is the human-readable name to show in the
+    /// sidebar (e.g. the original typed name from NewProjectFolderSheet). Defaults to the
+    /// folder's last path component when nil.
+    ///
+    /// Throws if ledger initialisation fails (e.g. disk full, permissions revoked). Callers
+    /// that created the folder themselves should roll it back on error; callers connecting an
+    /// existing folder can safely use `try?`.
+    func connectProject(at url: URL, displayName: String? = nil) throws {
         let fileCount = LedgerWriter.countProjectFiles(at: url)
-        let folderName = url.lastPathComponent
+        let name = displayName ?? url.lastPathComponent
 
         let project = Project(
             id: UUID(),
-            name: folderName,
+            name: name,
             folderURL: url,
             connectedAt: Date(),
             lastActivity: Date(),
@@ -66,12 +73,9 @@ class AppState: ObservableObject {
             intent: nil
         )
 
-        // Ledger init is fast (just creating directories and files)
-        do {
-            try LedgerWriter.initializeLedger(for: project, fileCount: fileCount)
-        } catch {
-            print("Ledger init error: \(error)")
-        }
+        // Ledger init is fast (just creating directories and files). Rethrow so callers
+        // that created the folder can roll back on failure.
+        try LedgerWriter.initializeLedger(for: project, fileCount: fileCount)
 
         store.add(project)
 

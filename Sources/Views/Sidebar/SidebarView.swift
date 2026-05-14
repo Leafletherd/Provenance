@@ -21,6 +21,7 @@ struct SidebarView: View {
     @State private var promoteState: ProjectState? = nil
     @State private var isPromoting = false
     @State private var showPromoteSheet = false
+    @State private var showNewFolderSheet = false
 
     // Computed binding that maps isHomeSelected + selectedProjectID → SidebarItem
     private var selectionBinding: Binding<SidebarItem?> {
@@ -171,25 +172,45 @@ struct SidebarView: View {
                 }
             }
         }
+        // New-folder sub-sheet — presented here so it persists even while the right pane
+        // transitions from Home → ProjectView after connect.
+        .sheet(isPresented: $showNewFolderSheet) {
+            NewProjectFolderSheet { folderURL, displayName in
+                showNewFolderSheet = false
+                Task { @MainActor in
+                    do {
+                        // (g) Hand off to the normal connect flow
+                        try appState.connectProject(at: folderURL, displayName: displayName)
+                    } catch {
+                        // (h) Ledger init failed — roll back the newly-created folder so we
+                        // don't leave an empty shell on disk, then surface the error.
+                        try? FileManager.default.removeItem(at: folderURL)
+                        // Re-open the sub-sheet so the user sees what went wrong.
+                        // (The sheet re-entry preserves the typed name / location.)
+                        showNewFolderSheet = true
+                    }
+                }
+            } onCancel: {
+                showNewFolderSheet = false
+            }
+        }
     }
 
     // MARK: - Folder picker
 
     private func openFolderPicker() {
-        let panel = NSOpenPanel()
-        panel.title = "Connect Project Folder"
-        panel.message = "Choose the folder you want to track with Provenance."
-        panel.canChooseFiles = false
-        panel.canChooseDirectories = true
-        panel.allowsMultipleSelection = false
-        panel.canCreateDirectories = true
-        panel.begin { response in
-            if response == .OK, let url = panel.url {
+        ConnectProjectFlow.openPanel(
+            didRequestCreate: {
+                // User wants to create a new folder — dismiss panel (already done) and
+                // show the sub-sheet from this view, which is always in the hierarchy.
+                showNewFolderSheet = true
+            },
+            onConnect: { url in
                 Task { @MainActor in
-                    appState.connectProject(at: url)
+                    try? appState.connectProject(at: url)
                 }
             }
-        }
+        )
     }
 }
 
