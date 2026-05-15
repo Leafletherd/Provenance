@@ -26,6 +26,8 @@ class ProjectState: ObservableObject, Identifiable {
     // Cache of last-seen .sceneboard file contents, keyed by file URL path.
     // Used to diff SceneBoard changes when the file is modified.
     private var sceneBoardCache: [String: Data] = [:]
+    /// Guards the once-per-session folder scan for pre-existing seed-trace sidecars.
+    private var seedTraceScanDone = false
 
     init(project: Project) {
         self.id = project.id
@@ -40,6 +42,8 @@ class ProjectState: ObservableObject, Identifiable {
         sources = LedgerWriter.readSources(from: project)
         artifacts = LedgerWriter.readArtifacts(from: project)
         events = LedgerWriter.readEvents(from: project)
+        backfillSeedArtifacts()
+        scanForExistingSeedTraces()
         // git log + manuscript scan are shell/disk-intensive — run off main thread
         let proj = project
         Task.detached(priority: .background) { [weak self] in
@@ -189,6 +193,68 @@ class ProjectState: ObservableObject, Identifiable {
                     self.reloadEvents()
                     self.updateLastActivity()
                 }
+            }
+        }
+    }
+
+    // MARK: - Seed-trace folder scan (on connect / re-resolve)
+
+    /// Back-fill `.oldDraft` artifacts named "Seed: …" that were created before
+    /// the `.seedHistory` type existed.  Persists the change if any were updated.
+    private func backfillSeedArtifacts() {
+        let needsBackfill = artifacts.contains { $0.type == .oldDraft && $0.title.hasPrefix("Seed: ") }
+        guard needsBackfill else { return }
+        artifacts = artifacts.map { a in
+            guard a.type == .oldDraft && a.title.hasPrefix("Seed: ") else { return a }
+            return Artifact(id: a.id, timestamp: a.timestamp, type: .seedHistory,
+                            title: a.title, attachmentFilename: a.attachmentFilename,
+                            caption: a.caption, exportIncluded: a.exportIncluded,
+                            seedMetadata: a.seedMetadata)
+        }
+        try? LedgerWriter.writeArtifacts(artifacts, to: project)
+    }
+
+    /// Walk the project folder for pre-existing `*.seed-trace.json` sidecars and
+    /// ingest each one.  Guarded by `seedTraceScanDone` so it runs at most once per
+    /// app session per ProjectState instance.  The ingestor's seen-set (persisted to
+    /// `.ledger/seed-trace-seen.json`) ensures full idempotency across sessions.
+    func scanForExistingSeedTraces() {
+        guard !seedTraceScanDone else { return }
+        seedTraceScanDone = true
+
+        let proj = project
+        let folderURL = project.folderURL
+
+        Task.detached(priority: .background) { [weak self] in
+            let urls = SeedTraceIngestor.scanFolder(at: folderURL)
+            guard !urls.isEmpty else { return }
+
+            var allEvents: [(detail: String, metadata: Data)] = []
+            var allArtifacts: [Artifact] = []
+
+            for url in urls {
+                let result = SeedTraceIngestor.ingest(fileURL: url, project: proj)
+                allEvents    += result.events
+                allArtifacts += result.artifacts
+            }
+
+            guard !allEvents.isEmpty || !allArtifacts.isEmpty else { return }
+
+            let capturedEvents    = allEvents
+            let capturedArtifacts = allArtifacts
+
+            await MainActor.run { [weak self] in
+                guard let self else { return }
+                for (detail, metadata) in capturedEvents {
+                    LedgerWriter.appendEvent(type: .seedPromoted, detail: detail,
+                                            to: proj, metadata: metadata)
+                }
+                self.artifacts.append(contentsOf: capturedArtifacts)
+                if !capturedArtifacts.isEmpty {
+                    try? LedgerWriter.writeArtifacts(self.artifacts, to: proj)
+                }
+                self.reloadEvents()
+                self.updateLastActivity()
             }
         }
     }
@@ -449,6 +515,7 @@ class ProjectState: ObservableObject, Identifiable {
                 var updated = project
                 updated.folderURL = url
                 project = updated
+                seedTraceScanDone = false  // re-resolve = re-scan for new sidecars
                 loadData()
                 startWatching()
             }
@@ -460,6 +527,7 @@ class ProjectState: ObservableObject, Identifiable {
             updated.folderBookmark = bm
             project = updated
             if !isWatching {
+                seedTraceScanDone = false  // re-resolve = re-scan for new sidecars
                 loadData()
                 startWatching()
             }

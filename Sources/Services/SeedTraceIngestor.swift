@@ -48,6 +48,34 @@ enum SeedTraceIngestor {
         var artifacts: [Artifact] = []
     }
 
+    // MARK: - Folder scan
+
+    /// Walk `root` for `*.seed-trace.json` files, skipping `.ledger`, `.git`,
+    /// hidden files, and package descendants.
+    static func scanFolder(at root: URL) -> [URL] {
+        var found: [URL] = []
+        let skipDirs: Set<String> = [".ledger", ".git", ".build", "node_modules", ".Trash"]
+        guard let enumerator = FileManager.default.enumerator(
+            at: root,
+            includingPropertiesForKeys: [.isDirectoryKey],
+            options: [.skipsHiddenFiles, .skipsPackageDescendants]
+        ) else { return [] }
+
+        for case let url as URL in enumerator {
+            let isDir = (try? url.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true
+            if isDir {
+                if skipDirs.contains(url.lastPathComponent) {
+                    enumerator.skipDescendants()
+                }
+                continue
+            }
+            if url.lastPathComponent.hasSuffix(".seed-trace.json") {
+                found.append(url)
+            }
+        }
+        return found
+    }
+
     // MARK: - Ingest
 
     /// Parse a seed-trace sidecar and return events + artifacts to add.
@@ -82,12 +110,13 @@ enum SeedTraceIngestor {
             let detail = "Seed \"\(seed.title)\" \u{2192} \(trace.boardPath) " +
                          "(history: \(histCount) \(entryWord), planted \(agoStr))"
 
-            // JSON-encode the SeedEntry for the metadata side-file.
-            if let metadata = try? JSONEncoder().encode(seed) {
+            // JSON-encode the SeedEntry for the metadata side-file + artifact store.
+            let seedData = try? JSONEncoder().encode(seed)
+            if let metadata = seedData {
                 result.events.append((detail: detail, metadata: metadata))
             }
 
-            // Artifact: one per seed, type oldDraft, no attachment in v1.
+            // Artifact: one per seed, type seedHistory, metadata carries full SeedEntry.
             let duration: String
             if let pd = plantDate {
                 let days = Int(-pd.timeIntervalSinceNow / 86400)
@@ -98,11 +127,12 @@ enum SeedTraceIngestor {
             let histStr = histCount == 1 ? "1 event" : "\(histCount) events"
             let caption = "Promoted from garden. Pre-promotion history: \(histStr) over \(duration)."
             result.artifacts.append(Artifact(
-                type: .oldDraft,
+                type: .seedHistory,
                 title: "Seed: \(seed.title)",
                 attachmentFilename: nil,
                 caption: caption,
-                exportIncluded: true
+                exportIncluded: true,
+                seedMetadata: seedData
             ))
         }
 
