@@ -48,15 +48,7 @@ struct ContentView: View {
         // App-level toolbar — always visible regardless of which pane is active.
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
-                Button {
-                    NotificationCenter.default.post(name: .connectProjectRequested, object: nil)
-                } label: {
-                    Image(systemName: "plus.circle")
-                        .font(.system(size: 14))
-                        .foregroundColor(Brand.textSecondary)
-                }
-                .buttonStyle(.borderless)
-                .help("Connect Project\u{2026}")
+                toolbarGroup
             }
         }
         // provenance://open?path=… for a folder not yet connected
@@ -77,6 +69,50 @@ struct ContentView: View {
             if let url = appState.pendingConnectURL {
                 Text("Connect \u{201C}\(url.lastPathComponent)\u{201D} to Provenance?\n\n\(url.path)")
             }
+        }
+    }
+
+    // MARK: - Toolbar group
+    //
+    // House → Home | divider | + Connect Project
+    // Mirrors Works' panel-toggle group pattern: HStack(spacing:0) with
+    // 1pt Rectangle dividers and .plain button style throughout.
+
+    private var toolbarGroup: some View {
+        HStack(spacing: 0) {
+
+            // House — navigate to Home view
+            Button {
+                appState.isHomeSelected = true
+                appState.selectedProjectID = nil
+            } label: {
+                Image(systemName: "house")
+                    .font(.system(size: 13))
+                    .foregroundColor(Brand.textSecondary)
+            }
+            .buttonStyle(.plain)
+            .help("Go to Home")
+
+            // Vertical divider
+            Rectangle()
+                .fill(Brand.border.opacity(0.5))
+                .frame(width: 1, height: 16)
+                .padding(.horizontal, Brand.spaceSM)
+
+            // Connect Project
+            Button {
+                NotificationCenter.default.post(name: .connectProjectRequested, object: nil)
+            } label: {
+                HStack(spacing: 5) {
+                    Image(systemName: "plus")
+                    Text("Connect Project")
+                        .font(.system(size: 12, weight: .medium))
+                }
+                .foregroundColor(Brand.accent)
+                .padding(.horizontal, Brand.spaceXS)
+            }
+            .buttonStyle(.plain)
+            .help("Connect Project\u{2026}")
         }
     }
 }
