@@ -41,7 +41,7 @@ struct FileSnapshotView: View {
                             .foregroundColor(Brand.textPrimary)
                     }
                     Text(snapshot.hash)
-                        .font(.system(.caption2, design: .monospaced))
+                        .font(.system(size: 10, design: .monospaced))
                         .foregroundColor(Brand.textMuted)
                 }
 
@@ -285,7 +285,7 @@ struct InlineDiffLineView: View {
         HStack(spacing: 0) {
             // Gutter marker
             Text(line.kind == .added ? "+" : line.kind == .removed ? "−" : " ")
-                .font(.system(.caption2, design: .monospaced))
+                .font(.system(size: 10, design: .monospaced))
                 .foregroundColor(gutterColor)
                 .frame(width: 16, alignment: .leading)
 

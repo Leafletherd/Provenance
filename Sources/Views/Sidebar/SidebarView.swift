@@ -266,7 +266,7 @@ struct ProjectRowView: View {
 
                 if let sub = missingSubtext {
                     Text(sub)
-                        .font(.caption2.italic())
+                        .font(.system(size: 10).italic())
                         .foregroundColor(Brand.textMuted)
                         .lineLimit(1)
                 }

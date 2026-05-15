@@ -128,7 +128,7 @@ private struct SeedTimelineRow: View {
                 HStack(spacing: 6) {
                     TypeBadge(label: entry.action, color: actionColor)
                     Text(entry.hash)
-                        .font(.system(.caption2, design: .monospaced))
+                        .font(.system(size: 10, design: .monospaced))
                         .foregroundColor(Brand.textMuted)
                 }
                 Text(entry.message)

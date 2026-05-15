@@ -17,9 +17,9 @@ struct VersionsView: View {
         VStack(spacing: 0) {
             HStack {
                 Text("Versions")
-                    .font(.headline)
+                    .font(.system(size: 18, weight: .semibold))
                 Text("(\(state.snapshots.count))")
-                    .foregroundColor(.secondary)
+                    .foregroundColor(Brand.textSecondary)
                 Spacer()
                 Button {
                     snapshotLabel = ""
@@ -90,20 +90,20 @@ struct SnapshotRowView: View {
                 HStack(spacing: 6) {
                     TypeBadge(label: snapshot.trigger.label, color: triggerColor)
                     Text(primaryTitle)
-                        .font(.subheadline.bold())
+                        .font(.system(size: 15, weight: .semibold))
                         .lineLimit(1)
                 }
                 HStack(spacing: 8) {
                     Text(displayFmt.string(from: snapshot.timestamp))
-                        .font(.caption)
-                        .foregroundColor(.secondary)
+                        .font(.system(size: 12))
+                        .foregroundColor(Brand.textSecondary)
                     if snapshot.filesChanged > 0 {
                         Text("·")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
+                            .font(.system(size: 12))
+                            .foregroundColor(Brand.textSecondary)
                         Text("\(snapshot.filesChanged) file\(snapshot.filesChanged == 1 ? "" : "s") changed")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
+                            .font(.system(size: 12))
+                            .foregroundColor(Brand.textSecondary)
                     }
                 }
                 // Show up to 3 changed file names with type badges
@@ -125,12 +125,12 @@ struct SnapshotRowView: View {
             Spacer()
             VStack(alignment: .trailing, spacing: 2) {
                 Text(snapshot.hash)
-                    .font(.system(.caption2, design: .monospaced))
-                    .foregroundColor(.secondary)
+                    .font(.system(size: 10, design: .monospaced))
+                    .foregroundColor(Brand.textSecondary)
             }
             Image(systemName: "chevron.right")
-                .font(.caption)
-                .foregroundColor(.secondary)
+                .font(.system(size: 12))
+                .foregroundColor(Brand.textSecondary)
         }
         .padding(.vertical, 6)
     }
@@ -173,18 +173,18 @@ struct ManualSnapshotSheet: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text("Take Manual Snapshot")
-                .font(.headline)
+                .font(.system(size: 18, weight: .semibold))
 
             VStack(alignment: .leading, spacing: 4) {
                 Text("Label (optional)")
-                    .font(.caption).foregroundColor(.secondary)
+                    .font(.system(size: 12)).foregroundColor(Brand.textSecondary)
                 TextField("e.g. Before major revision", text: $label)
                     .textFieldStyle(.roundedBorder)
             }
 
             Text("A snapshot captures the current state of all files in your project folder.")
-                .font(.caption)
-                .foregroundColor(.secondary)
+                .font(.system(size: 12))
+                .foregroundColor(Brand.textSecondary)
 
             HStack {
                 Spacer()

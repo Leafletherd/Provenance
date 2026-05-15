@@ -16,6 +16,8 @@ struct ProvenanceApp: App {
                     appState.handleURL(url)
                 }
         }
+        // §5a: default 1100×720 on first launch; SwiftUI persists user-resize automatically
+        .defaultSize(width: 1100, height: 720)
         .windowStyle(.titleBar)
         .windowToolbarStyle(.unified(showsTitle: true))
         .commands {

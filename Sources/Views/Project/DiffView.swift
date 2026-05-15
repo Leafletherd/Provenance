@@ -40,7 +40,7 @@ struct DiffView: View {
                 VStack(alignment: .leading, spacing: 4) {
                     HStack(spacing: 6) {
                         Text(snapshot.hash)
-                            .font(.system(.headline, design: .monospaced))
+                            .font(.system(size: 18, weight: .semibold, design: .monospaced))
                             .foregroundColor(Brand.textPrimary)
                         TypeBadge(label: snapshot.trigger.label, color: triggerColor)
                     }
@@ -188,7 +188,7 @@ struct DiffLineView: View {
 
     var body: some View {
         Text(line.text.isEmpty ? " " : line.text)
-            .font(.system(.caption, design: .monospaced))
+            .font(.system(size: 12, design: .monospaced))
             .foregroundColor(textColor)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(backgroundColor)

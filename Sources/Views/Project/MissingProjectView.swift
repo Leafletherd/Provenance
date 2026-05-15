@@ -33,10 +33,10 @@ struct MissingProjectView: View {
                 .foregroundColor(Brand.textMuted)
             VStack(spacing: Brand.spaceSM) {
                 Text("This project lives on \u{201C}\(volumeName)\u{201D}.")
-                    .font(.title2.bold())
+                    .font(.system(size: 22, weight: .bold))
                     .foregroundColor(Brand.textPrimary)
                 Text("Connect the drive to continue working.")
-                    .font(.body)
+                    .font(.system(size: 13))
                     .foregroundColor(Brand.textSecondary)
                     .multilineTextAlignment(.center)
             }
@@ -59,10 +59,10 @@ struct MissingProjectView: View {
                 .foregroundColor(Brand.textMuted)
             VStack(spacing: Brand.spaceSM) {
                 Text("This folder couldn\u{2019}t be found.")
-                    .font(.title2.bold())
+                    .font(.system(size: 22, weight: .bold))
                     .foregroundColor(Brand.textPrimary)
                 Text("Move it back, or relink it from here.")
-                    .font(.body)
+                    .font(.system(size: 13))
                     .foregroundColor(Brand.textSecondary)
                     .multilineTextAlignment(.center)
             }
@@ -187,14 +187,14 @@ private struct DifferentProjectSheet: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
             Text("Different Project")
-                .font(.headline)
+                .font(.system(size: 18, weight: .semibold))
 
             Text("""
                 This folder has a Provenance ledger, but its project ID doesn\u{2019}t match \
                 \u{201C}\(missingName)\u{201D}. Connect it as a separate project, or keep \
                 \u{201C}\(missingName)\u{201D} marked as missing?
                 """)
-                .font(.body)
+                .font(.system(size: 13))
                 .fixedSize(horizontal: false, vertical: true)
 
             HStack {
