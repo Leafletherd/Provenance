@@ -27,14 +27,14 @@ struct NewProjectFolderSheet: View {
 
             // Title
             Text("Create a new project folder")
-                .font(.headline)
+                .font(.system(size: 18, weight: .semibold))
                 .padding(.bottom, 20)
 
             // Project name
             VStack(alignment: .leading, spacing: 6) {
                 Text("Project name")
                     .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(.secondary)
+                    .foregroundColor(Brand.textSecondary)
 
                 TextField("The Mythos of Aria", text: $projectName)
                     .textFieldStyle(.roundedBorder)
@@ -45,7 +45,7 @@ struct NewProjectFolderSheet: View {
                 if let err = errorMessage {
                     Text(err)
                         .font(.system(size: 11))
-                        .foregroundColor(.red)
+                        .foregroundColor(Brand.statusStuck)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
@@ -55,12 +55,12 @@ struct NewProjectFolderSheet: View {
             VStack(alignment: .leading, spacing: 6) {
                 Text("Location")
                     .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(.secondary)
+                    .foregroundColor(Brand.textSecondary)
 
                 HStack(spacing: 8) {
                     Text(friendlyPath(location))
                         .font(.system(size: 13))
-                        .foregroundColor(.primary)
+                        .foregroundColor(Brand.textPrimary)
                         .lineLimit(1)
                         .truncationMode(.middle)
                         .frame(maxWidth: .infinity, alignment: .leading)

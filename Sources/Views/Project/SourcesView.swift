@@ -9,7 +9,7 @@ struct SourcesView: View {
         VStack(spacing: 0) {
             HStack {
                 Text("Sources")
-                    .font(.headline)
+                    .font(.system(size: 18, weight: .semibold))
                 Spacer()
                 Button {
                     showAddSheet = true
@@ -66,38 +66,38 @@ struct SourceCardView: View {
             HStack {
                 TypeBadge(label: source.type.label, color: typeColor(source.type))
                 Text(source.title)
-                    .font(.headline)
+                    .font(.system(size: 18, weight: .semibold))
                     .lineLimit(1)
                 Spacer()
                 Text(displayFmt.string(from: source.timestamp))
-                    .font(.caption)
-                    .foregroundColor(.secondary)
+                    .font(.system(size: 12))
+                    .foregroundColor(Brand.textSecondary)
             }
 
             if let u = source.urlString, !u.isEmpty {
                 Text(u)
-                    .font(.caption)
-                    .foregroundColor(.blue)
+                    .font(.system(size: 12))
+                    .foregroundColor(Brand.accent)
                     .lineLimit(1)
                     .truncationMode(.middle)
             }
             if let f = source.filePath, !f.isEmpty {
                 Text(f)
-                    .font(.caption)
-                    .foregroundColor(.secondary)
+                    .font(.system(size: 12))
+                    .foregroundColor(Brand.textSecondary)
                     .lineLimit(1)
             }
             if let p = source.passage, !p.isEmpty {
                 Text("\"\(p)\"")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
+                    .font(.system(size: 12))
+                    .foregroundColor(Brand.textSecondary)
                     .lineLimit(2)
                     .italic()
             }
             if let a = source.annotation, !a.isEmpty {
                 Text(a)
-                    .font(.caption)
-                    .foregroundColor(.primary)
+                    .font(.system(size: 12))
+                    .foregroundColor(Brand.textPrimary)
                     .lineLimit(2)
             }
 
@@ -114,7 +114,7 @@ struct SourceCardView: View {
                 }
             ))
             .toggleStyle(.checkbox)
-            .font(.caption)
+            .font(.system(size: 12))
         }
         .padding(Brand.spaceMD)
         .background(Brand.surfaceSunken.opacity(0.5))
@@ -155,7 +155,7 @@ struct AddSourceSheetView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text("Add Source")
-                .font(.headline)
+                .font(.system(size: 18, weight: .semibold))
 
             Picker("Type", selection: $selectedType) {
                 ForEach(SourceType.allCases, id: \.self) { t in
@@ -166,7 +166,7 @@ struct AddSourceSheetView: View {
 
             VStack(alignment: .leading, spacing: 4) {
                 Text("Title")
-                    .font(.caption).foregroundColor(.secondary)
+                    .font(.system(size: 12)).foregroundColor(Brand.textSecondary)
                 TextField("Source title", text: $title)
                     .textFieldStyle(.roundedBorder)
             }
@@ -175,18 +175,18 @@ struct AddSourceSheetView: View {
             case .url:
                 VStack(alignment: .leading, spacing: 4) {
                     Text("URL")
-                        .font(.caption).foregroundColor(.secondary)
+                        .font(.system(size: 12)).foregroundColor(Brand.textSecondary)
                     TextField("https://...", text: $urlString)
                         .textFieldStyle(.roundedBorder)
                 }
             case .localFile:
                 VStack(alignment: .leading, spacing: 4) {
                     Text("File Path")
-                        .font(.caption).foregroundColor(.secondary)
+                        .font(.system(size: 12)).foregroundColor(Brand.textSecondary)
                     HStack {
                         Text(filePath.isEmpty ? "No file selected" : filePath)
-                            .font(.caption)
-                            .foregroundColor(.secondary)
+                            .font(.system(size: 12))
+                            .foregroundColor(Brand.textSecondary)
                             .lineLimit(1)
                             .truncationMode(.middle)
                         Spacer()
@@ -200,17 +200,17 @@ struct AddSourceSheetView: View {
             case .quotedPassage:
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Passage")
-                        .font(.caption).foregroundColor(.secondary)
+                        .font(.system(size: 12)).foregroundColor(Brand.textSecondary)
                     TextEditor(text: $passage)
-                        .font(.body)
+                        .font(.system(size: 13))
                         .frame(height: 100)
-                        .overlay(RoundedRectangle(cornerRadius: 4).stroke(Color.secondary.opacity(0.3)))
+                        .overlay(RoundedRectangle(cornerRadius: Brand.radiusSm).stroke(Brand.border))
                 }
             }
 
             VStack(alignment: .leading, spacing: 4) {
                 Text("Annotation (optional)")
-                    .font(.caption).foregroundColor(.secondary)
+                    .font(.system(size: 12)).foregroundColor(Brand.textSecondary)
                 TextField("Notes about this source", text: $annotation)
                     .textFieldStyle(.roundedBorder)
             }

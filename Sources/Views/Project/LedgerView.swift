@@ -394,23 +394,23 @@ struct LedgerEventRowView: View {
         case .snapshotAuto:        return Brand.accent.opacity(0.8)
         case .snapshotScheduled:   return Brand.statusStuck
         case .snapshotManual:      return Brand.accent
-        case .checkin:             return Color(hex: "5A6480")  // dusty slate
+        case .checkin:             return Brand.statusDone
         case .sourceAdded:         return Brand.accent
-        case .artifactAdded:       return Color(hex: "5A6480")
+        case .artifactAdded:       return Brand.statusDone
         case .folderMoved:         return Brand.statusStuck
         case .projectDisconnected: return Brand.textMuted
         case .githubSync:          return Brand.accent
         case .sceneBoardChange:    return Brand.accent.opacity(0.85)
         case .nestedRepoDetected:  return Brand.statusStuck
         case .seedPromoted:        return Brand.textBrand   // tan-600 — garden/seed themed
-        case .paste:               return Color(hex: "7C6F9F")  // muted violet — provenance/origin
+        case .paste:               return Brand.statusPaste // muted violet — provenance/origin
         case .bundleExported:      return Brand.accent
         case .promotedToWorks:     return Brand.accentDark
         case .chainStarted:        return Brand.accent
         case .chainReset:          return Brand.statusStuck
         case .manifestMigrated:     return Brand.textMuted
         case .projectsDeduplicated: return Brand.textMuted
-        case .error:                return Color.red
+        case .error:                return Brand.statusStuck
         }
     }
 
@@ -429,7 +429,7 @@ struct LedgerEventRowView: View {
             VStack(alignment: .leading, spacing: 2) {
                 HStack {
                     Text(event.type.displayName)
-                        .font(.caption.bold())
+                        .font(.system(size: 12, weight: .semibold))
                         .foregroundColor(isPreChain ? Brand.textMuted : eventColor)
                     if isPreChain {
                         Text("pre-chain")
@@ -446,7 +446,7 @@ struct LedgerEventRowView: View {
                     }
                     Spacer()
                     Text(displayFmt.string(from: event.timestamp))
-                        .font(.caption2)
+                        .font(.system(size: 10))
                         .foregroundColor(Brand.textMuted)
                     if isTappable {
                         Image(systemName: "chevron.right")
@@ -455,7 +455,7 @@ struct LedgerEventRowView: View {
                     }
                 }
                 Text(event.detail)
-                    .font(.caption)
+                    .font(.system(size: 12))
                     .foregroundColor(isPreChain ? Brand.textMuted : Brand.textPrimary)
                     .lineLimit(3)
             }
@@ -473,7 +473,7 @@ struct FilterButton: View {
     var body: some View {
         Button(action: action) {
             Text(label)
-                .font(.caption.bold())
+                .font(.system(size: 12, weight: .semibold))
                 .foregroundColor(isSelected ? .white : Brand.textSecondary)
                 .padding(.horizontal, 8)
                 .padding(.vertical, 4)
@@ -511,12 +511,12 @@ struct PasteDetailView: View {
                     HStack(spacing: 6) {
                         Image(systemName: "doc.on.clipboard")
                             .font(.system(size: 12, weight: .medium))
-                            .foregroundColor(Color(hex: "7C6F9F"))
+                            .foregroundColor(Brand.statusPaste)
                         Text("Paste Source")
                             .font(.system(size: 15, weight: .semibold))
                             .foregroundColor(Brand.textPrimary)
                         if meta?.isAI == true {
-                            TypeBadge(label: "AI", color: Color(hex: "7C6F9F"))
+                            TypeBadge(label: "AI", color: Brand.statusPaste)
                         }
                     }
                     Text(displayFmt.string(from: event.timestamp))
@@ -608,7 +608,7 @@ struct PasteDetailView: View {
                         }
                     } else {
                         Text("Paste metadata unavailable.")
-                            .font(.caption)
+                            .font(.system(size: 12))
                             .foregroundColor(Brand.textMuted)
                     }
                 }

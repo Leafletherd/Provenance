@@ -165,7 +165,7 @@ struct ExportView: View {
                     if let err = exportError {
                         Label(err, systemImage: "exclamationmark.triangle.fill")
                             .font(.system(size: 12))
-                            .foregroundColor(.red)
+                            .foregroundColor(Brand.statusStuck)
                     }
                 }
 
@@ -210,7 +210,7 @@ struct ExportView: View {
                     if let err = promoteError {
                         Label(err, systemImage: "exclamationmark.triangle.fill")
                             .font(.system(size: 12))
-                            .foregroundColor(.red)
+                            .foregroundColor(Brand.statusStuck)
                     }
                 }
             }

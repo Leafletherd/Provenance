@@ -10,7 +10,7 @@ struct CheckInsView: View {
         VStack(spacing: 0) {
             HStack {
                 Text("Check-ins")
-                    .font(.headline)
+                    .font(.system(size: 18, weight: .semibold))
                 Spacer()
                 Button {
                     showAddSheet = true
@@ -76,7 +76,7 @@ struct CheckInCardView: View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
                 Text(checkIn.status.label)
-                    .font(.caption2.bold())
+                    .font(.system(size: 10, weight: .semibold))
                     .foregroundColor(.white)
                     .padding(.horizontal, 6)
                     .padding(.vertical, 2)
@@ -86,12 +86,12 @@ struct CheckInCardView: View {
                 Spacer()
 
                 Text(displayFmt.string(from: checkIn.timestamp))
-                    .font(.caption)
-                    .foregroundColor(.secondary)
+                    .font(.system(size: 12))
+                    .foregroundColor(Brand.textSecondary)
             }
 
             Text(checkIn.text)
-                .font(.body)
+                .font(.system(size: 13))
 
             Toggle("Include in export", isOn: Binding(
                 get: { checkIn.exportIncluded },
@@ -109,7 +109,7 @@ struct CheckInCardView: View {
                 }
             ))
             .toggleStyle(.checkbox)
-            .font(.caption)
+            .font(.system(size: 12))
         }
         .padding(Brand.spaceMD)
         .background(Brand.surfaceSunken.opacity(0.5))
@@ -132,18 +132,18 @@ struct AddCheckInSheetView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text("New Check-in")
-                .font(.headline)
+                .font(.system(size: 18, weight: .semibold))
 
             VStack(alignment: .leading, spacing: 8) {
                 Text("How's it going?")
-                    .font(.caption).foregroundColor(.secondary)
+                    .font(.system(size: 12)).foregroundColor(Brand.textSecondary)
                 HStack(spacing: 8) {
                     ForEach(CheckInStatus.allCases, id: \.self) { status in
                         Button {
                             selectedStatus = status
                         } label: {
                             Text(status.label)
-                                .font(.caption.bold())
+                                .font(.system(size: 12, weight: .semibold))
                                 .foregroundColor(selectedStatus == status ? .white : status.swiftUIColor)
                                 .padding(.horizontal, 10)
                                 .padding(.vertical, 6)
@@ -161,18 +161,18 @@ struct AddCheckInSheetView: View {
 
             VStack(alignment: .leading, spacing: 4) {
                 Text("Entry")
-                    .font(.caption).foregroundColor(.secondary)
+                    .font(.system(size: 12)).foregroundColor(Brand.textSecondary)
                 // TextEditor needs to be a direct child of the layout — no overlay
                 // on top of it or it won't receive click events on macOS
                 ZStack(alignment: .topLeading) {
-                    RoundedRectangle(cornerRadius: 6)
-                        .stroke(textFocused ? Color.accentColor : Color.secondary.opacity(0.3))
+                    RoundedRectangle(cornerRadius: Brand.radiusSm)
+                        .stroke(textFocused ? Color.accentColor : Brand.border)
                         .background(
-                            RoundedRectangle(cornerRadius: 6)
-                                .fill(Color.secondary.opacity(0.05))
+                            RoundedRectangle(cornerRadius: Brand.radiusSm)
+                                .fill(Brand.surfaceSunken)
                         )
                     TextEditor(text: $text)
-                        .font(.body)
+                        .font(.system(size: 13))
                         .focused($textFocused)
                         .padding(6)
                         .scrollContentBackground(.hidden)
@@ -230,18 +230,18 @@ struct EditCheckInSheetView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text("Edit Check-in")
-                .font(.headline)
+                .font(.system(size: 18, weight: .semibold))
 
             VStack(alignment: .leading, spacing: 8) {
                 Text("Status")
-                    .font(.caption).foregroundColor(.secondary)
+                    .font(.system(size: 12)).foregroundColor(Brand.textSecondary)
                 HStack(spacing: 8) {
                     ForEach(CheckInStatus.allCases, id: \.self) { status in
                         Button {
                             selectedStatus = status
                         } label: {
                             Text(status.label)
-                                .font(.caption.bold())
+                                .font(.system(size: 12, weight: .semibold))
                                 .foregroundColor(selectedStatus == status ? .white : status.swiftUIColor)
                                 .padding(.horizontal, 10)
                                 .padding(.vertical, 6)
@@ -259,16 +259,16 @@ struct EditCheckInSheetView: View {
 
             VStack(alignment: .leading, spacing: 4) {
                 Text("Entry")
-                    .font(.caption).foregroundColor(.secondary)
+                    .font(.system(size: 12)).foregroundColor(Brand.textSecondary)
                 ZStack(alignment: .topLeading) {
-                    RoundedRectangle(cornerRadius: 6)
-                        .stroke(textFocused ? Color.accentColor : Color.secondary.opacity(0.3))
+                    RoundedRectangle(cornerRadius: Brand.radiusSm)
+                        .stroke(textFocused ? Color.accentColor : Brand.border)
                         .background(
-                            RoundedRectangle(cornerRadius: 6)
-                                .fill(Color.secondary.opacity(0.05))
+                            RoundedRectangle(cornerRadius: Brand.radiusSm)
+                                .fill(Brand.surfaceSunken)
                         )
                     TextEditor(text: $text)
-                        .font(.body)
+                        .font(.system(size: 13))
                         .focused($textFocused)
                         .padding(6)
                         .scrollContentBackground(.hidden)

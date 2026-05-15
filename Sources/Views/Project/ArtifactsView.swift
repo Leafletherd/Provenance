@@ -16,7 +16,7 @@ struct ArtifactsView: View {
         VStack(spacing: 0) {
             HStack {
                 Text("Artifacts")
-                    .font(.headline)
+                    .font(.system(size: 18, weight: .semibold))
                 Spacer()
                 Button {
                     showAddSheet = true
@@ -99,7 +99,7 @@ struct ArtifactCardView: View {
             // Thumbnail or icon
             ZStack {
                 RoundedRectangle(cornerRadius: 8)
-                    .fill(Color.secondary.opacity(0.1))
+                    .fill(Brand.surfaceSunken)
                     .frame(height: 100)
                 if let img = thumbnail {
                     Image(nsImage: img)
@@ -110,7 +110,7 @@ struct ArtifactCardView: View {
                 } else {
                     Image(systemName: systemIconName)
                         .font(.system(size: 32))
-                        .foregroundColor(.secondary)
+                        .foregroundColor(Brand.textSecondary)
                 }
             }
 
@@ -118,21 +118,21 @@ struct ArtifactCardView: View {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(artifact.title)
-                        .font(.subheadline.bold())
+                        .font(.system(size: 15, weight: .semibold))
                         .lineLimit(2)
-                    TypeBadge(label: artifact.type.rawValue, color: .secondary.opacity(0.8))
+                    TypeBadge(label: artifact.type.rawValue, color: Brand.textMuted)
                 }
                 Spacer()
             }
 
             Text(displayFmt.string(from: artifact.timestamp))
-                .font(.caption2)
-                .foregroundColor(.secondary)
+                .font(.system(size: 10))
+                .foregroundColor(Brand.textSecondary)
 
             if let caption = artifact.caption, !caption.isEmpty {
                 Text(caption)
-                    .font(.caption)
-                    .foregroundColor(.secondary)
+                    .font(.system(size: 12))
+                    .foregroundColor(Brand.textSecondary)
                     .lineLimit(2)
             }
 
@@ -150,7 +150,7 @@ struct ArtifactCardView: View {
                 }
             ))
             .toggleStyle(.checkbox)
-            .font(.caption)
+            .font(.system(size: 12))
         }
         .padding(Brand.spaceMD)
         .background(Brand.surfaceRaised)
@@ -182,11 +182,11 @@ struct AddArtifactSheetView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text("Add Artifact")
-                .font(.headline)
+                .font(.system(size: 18, weight: .semibold))
 
             VStack(alignment: .leading, spacing: 4) {
                 Text("Type")
-                    .font(.caption).foregroundColor(.secondary)
+                    .font(.system(size: 12)).foregroundColor(Brand.textSecondary)
                 Picker("Type", selection: $selectedType) {
                     ForEach(ArtifactType.allCases, id: \.self) { t in
                         Text(t.rawValue).tag(t)
@@ -197,7 +197,7 @@ struct AddArtifactSheetView: View {
 
             VStack(alignment: .leading, spacing: 4) {
                 Text("Title")
-                    .font(.caption).foregroundColor(.secondary)
+                    .font(.system(size: 12)).foregroundColor(Brand.textSecondary)
                 TextField("Artifact title", text: $title)
                     .textFieldStyle(.roundedBorder)
                     .controlSize(.large)
@@ -205,7 +205,7 @@ struct AddArtifactSheetView: View {
 
             VStack(alignment: .leading, spacing: 4) {
                 Text("Attachment (optional)")
-                    .font(.caption).foregroundColor(.secondary)
+                    .font(.system(size: 12)).foregroundColor(Brand.textSecondary)
                 HStack {
                     if let url = selectedFileURL {
                         Text(url.lastPathComponent)
@@ -236,7 +236,7 @@ struct AddArtifactSheetView: View {
 
             VStack(alignment: .leading, spacing: 4) {
                 Text("Caption (optional)")
-                    .font(.caption).foregroundColor(.secondary)
+                    .font(.system(size: 12)).foregroundColor(Brand.textSecondary)
                 TextField("Describe this artifact", text: $caption)
                     .textFieldStyle(.roundedBorder)
                     .controlSize(.large)
@@ -317,7 +317,7 @@ struct EditArtifactSheetView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text("Edit Artifact")
-                .font(.headline)
+                .font(.system(size: 18, weight: .semibold))
 
             // Preview
             if let img = thumbnail {
@@ -331,7 +331,7 @@ struct EditArtifactSheetView: View {
 
             VStack(alignment: .leading, spacing: 4) {
                 Text("Category")
-                    .font(.caption).foregroundColor(.secondary)
+                    .font(.system(size: 12)).foregroundColor(Brand.textSecondary)
                 Picker("Category", selection: $selectedType) {
                     ForEach(ArtifactType.allCases, id: \.self) { t in
                         Text(t.rawValue).tag(t)
@@ -342,7 +342,7 @@ struct EditArtifactSheetView: View {
 
             VStack(alignment: .leading, spacing: 4) {
                 Text("Title")
-                    .font(.caption).foregroundColor(.secondary)
+                    .font(.system(size: 12)).foregroundColor(Brand.textSecondary)
                 TextField("Artifact title", text: $title)
                     .textFieldStyle(.roundedBorder)
                     .controlSize(.large)
@@ -350,7 +350,7 @@ struct EditArtifactSheetView: View {
 
             VStack(alignment: .leading, spacing: 4) {
                 Text("Caption")
-                    .font(.caption).foregroundColor(.secondary)
+                    .font(.system(size: 12)).foregroundColor(Brand.textSecondary)
                 TextField("Describe this artifact", text: $caption)
                     .textFieldStyle(.roundedBorder)
                     .controlSize(.large)
@@ -359,11 +359,11 @@ struct EditArtifactSheetView: View {
             if let filename = artifact.attachmentFilename {
                 HStack(spacing: 4) {
                     Image(systemName: "paperclip")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
+                        .font(.system(size: 12))
+                        .foregroundColor(Brand.textSecondary)
                     Text(filename)
-                        .font(.caption)
-                        .foregroundColor(.secondary)
+                        .font(.system(size: 12))
+                        .foregroundColor(Brand.textSecondary)
                         .lineLimit(1)
                 }
             }
