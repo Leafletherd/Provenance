@@ -111,26 +111,23 @@ struct SidebarView: View {
         )
         .navigationTitle("Provenance")
         .safeAreaInset(edge: .bottom) {
-            HStack(spacing: 4) {
-                Button {
+            HStack(spacing: 2) {
+                // §5c hover state via shared IconButton
+                IconButton(systemImage: "plus", helpText: "Connect a project folder") {
                     openFolderPicker()
-                } label: {
-                    Image(systemName: "plus")
                 }
-                .buttonStyle(.borderless)
-                .help("Connect a project folder")
 
-                Button {
+                IconButton(
+                    systemImage: "minus",
+                    helpText: "Disconnect selected project"
+                ) {
                     if let id = appState.selectedProjectID {
                         projectToRemove = id
                         showRemoveAlert = true
                     }
-                } label: {
-                    Image(systemName: "minus")
                 }
-                .buttonStyle(.borderless)
                 .disabled(appState.isHomeSelected || appState.selectedProjectID == nil)
-                .help("Disconnect selected project")
+                .opacity((appState.isHomeSelected || appState.selectedProjectID == nil) ? 0.35 : 1)
 
                 Spacer()
             }

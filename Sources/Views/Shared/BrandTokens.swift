@@ -27,7 +27,18 @@ enum Brand {
     static let textBrand     = Color(light: "8A6E42", dark: "C7A56C")  // tan-600 / lifted for dark
 
     // MARK: - Interactive states (dynamic)
-    static let surfaceSelected = Color(light: "EDE4D0", dark: "3A352C")  // active tab / selected item
+    static let surfaceSelected  = Color(light: "EDE4D0", dark: "3A352C")  // active tab / selected item
+
+    // MARK: - Floating chrome tokens (§5b, §5c — REV-6)
+    /// Floating toolbar pill background: white in light, warm-elevated dark (#3A352C) in dark.
+    static let surfaceFloating  = Color(light: "FFFFFF", dark: "3A352C")
+    /// Icon hover fill: ~6% black in light, ~8% white in dark (Apple Mail pattern).
+    static let surfaceHover     = Color(NSColor(name: nil) { appearance in
+        switch appearance.bestMatch(from: [.aqua, .darkAqua]) {
+        case .darkAqua: return NSColor(white: 1, alpha: 0.08)
+        default:        return NSColor(white: 0, alpha: 0.06)
+        }
+    })
 
     // MARK: - Provenance Accent (single-hex — works in both modes)
     static let accent        = Color(hex: "1D9E75")  // teal-400

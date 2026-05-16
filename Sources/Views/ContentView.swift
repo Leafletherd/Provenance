@@ -3,6 +3,10 @@ import SwiftUI
 struct ContentView: View {
     @EnvironmentObject var appState: AppState
 
+    // Hover states for pill buttons (must live at View level — @State requires a View)
+    @State private var homeHovering    = false
+    @State private var connectHovering = false
+
     var body: some View {
         NavigationSplitView {
             SidebarView()
@@ -45,10 +49,15 @@ struct ContentView: View {
                 }
             }
         }
+        // §5b — toolbar background = surfaceBase so the floating pill reads as elevated over it.
+        // .visible forces the background to render even when the toolbar has no title.
+        // This also eliminates the old-chrome flash-back: the background is now always explicit.
+        .toolbarBackground(Brand.surfaceBase, for: .windowToolbar)
+        .toolbarBackground(.visible, for: .windowToolbar)
         // App-level toolbar — always visible regardless of which pane is active.
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
-                toolbarGroup
+                pill
             }
         }
         // provenance://open?path=… for a folder not yet connected
@@ -72,49 +81,68 @@ struct ContentView: View {
         }
     }
 
-    // MARK: - Toolbar group
+    // MARK: - Floating pill (§5b)
     //
-    // House → Home | divider | + Connect Project
-    // Mirrors Works' panel-toggle group pattern: HStack(spacing:0) with
-    // 1pt Rectangle dividers and .plain button style throughout.
+    // Capsule containing:   [house icon] | [Connect Project (accent label-action)]
+    // Background: Brand.surfaceFloating (white / #3A352C dark).
+    // Border: 0.5px Brand.border.
+    // Icons get circular Brand.surfaceHover on hover (§5c).
+    // Label-action gets capsule Brand.surfaceHover on hover (§5c).
 
-    private var toolbarGroup: some View {
-        HStack(spacing: 0) {
+    private var pill: some View {
+        HStack(spacing: 6) {
 
-            // House — navigate to Home view
+            // Home icon — circular hover
             Button {
                 appState.isHomeSelected = true
                 appState.selectedProjectID = nil
             } label: {
                 Image(systemName: "house")
-                    .font(.system(size: 13))
+                    .font(.system(size: 13, weight: .medium))
                     .foregroundColor(Brand.textSecondary)
+                    .frame(width: 26, height: 26)
+                    .background(
+                        Circle().fill(homeHovering ? Brand.surfaceHover : Color.clear)
+                    )
             }
             .buttonStyle(.plain)
+            .onHover { homeHovering = $0 }
             .help("Go to Home")
 
-            // Vertical divider
+            // Internal vertical divider
             Rectangle()
-                .fill(Brand.border.opacity(0.5))
-                .frame(width: 1, height: 16)
-                .padding(.horizontal, Brand.spaceSM)
+                .fill(Brand.border)
+                .frame(width: 0.5, height: 16)
 
-            // Connect Project
+            // Connect Project — primary label-action in Brand.textBrand (§5b)
             Button {
                 NotificationCenter.default.post(name: .connectProjectRequested, object: nil)
             } label: {
                 HStack(spacing: 5) {
                     Image(systemName: "plus")
+                        .font(.system(size: 11, weight: .medium))
                     Text("Connect Project")
                         .font(.system(size: 12, weight: .medium))
                 }
-                .foregroundColor(Brand.accent)
-                .padding(.horizontal, Brand.spaceXS)
+                .foregroundColor(Brand.textBrand)
+                .padding(.horizontal, Brand.spaceSM)
+                .padding(.vertical, 3)
+                .background(
+                    Capsule().fill(connectHovering ? Brand.surfaceHover : Color.clear)
+                )
             }
             .buttonStyle(.plain)
+            .onHover { connectHovering = $0 }
             .help("Connect Project\u{2026}")
         }
-        .padding(.leading, Brand.spaceMD)
-        .padding(.trailing, Brand.spaceSM)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(
+            Capsule()
+                .fill(Brand.surfaceFloating)
+                .overlay(
+                    Capsule().stroke(Brand.border, lineWidth: 0.5)
+                )
+        )
     }
 }
