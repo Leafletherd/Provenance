@@ -53,15 +53,16 @@ struct HomeView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: Brand.spaceXL) {
 
-                // Greeting — left-aligned
-                Text(greeting)
-                    .font(.system(size: 22, weight: .bold))
-                    .foregroundColor(Brand.textPrimary)
-
-                // Prompt + composer — horizontally centered, max 560pt
+                // ── Greeting + prompt + composer locked together in a centered 560pt column ──
+                // All four elements (greeting, prompt, text box, project picker) share a single
+                // VStack so they reposition as a unit on window resize.
                 HStack(spacing: 0) {
                     Spacer(minLength: 0)
                     VStack(alignment: .leading, spacing: Brand.spaceMD) {
+                        Text(greeting)
+                            .font(.system(size: 22, weight: .bold))
+                            .foregroundColor(Brand.textPrimary)
+
                         Text(contextualPrompt)
                             .font(.system(size: 15, weight: .medium))
                             .foregroundColor(Brand.textSecondary)
@@ -158,13 +159,15 @@ struct HomeView: View {
             }
 
             // Text input
+            // Placeholder and TextEditor use identical padding so the first typed
+            // character lands at the exact same x,y as the placeholder's first letter.
             ZStack(alignment: .topLeading) {
                 if checkInText.isEmpty {
                     Text("Ready to check in? Type a sentence or two.")
                         .font(.system(size: 13).italic())
                         .foregroundColor(Brand.textMuted)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 8)
+                        .padding(.horizontal, 4)
+                        .padding(.vertical, 4)
                         .allowsHitTesting(false)
                 }
                 TextEditor(text: $checkInText)
@@ -196,19 +199,11 @@ struct HomeView: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: Brand.spaceMD) {
                     ForEach(appState.projectStates) { state in
-                        ProjectHomeCard(
-                            state: state,
-                            isSelected: targetProjectID == state.project.id,
-                            onSelect: {
-                                // Single-click: set as the check-in target
-                                targetProjectID = state.project.id
-                            },
-                            onOpen: {
-                                // Open button: navigate into the project's tabs
-                                appState.isHomeSelected = false
-                                appState.selectedProjectID = state.project.id
-                            }
-                        )
+                        ProjectHomeCard(state: state) {
+                            // Single-click: navigate into the project's tabs
+                            appState.isHomeSelected = false
+                            appState.selectedProjectID = state.project.id
+                        }
                     }
                 }
                 .padding(.bottom, 2)
@@ -344,13 +339,11 @@ private struct StatusChip: View {
 
 private struct ProjectHomeCard: View {
     @ObservedObject var state: ProjectState
-    let isSelected: Bool
-    let onSelect: () -> Void
     let onOpen: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: Brand.spaceSM) {
-            // Header: name + status dot + open chevron
+            // Header: status dot + name
             HStack(spacing: 6) {
                 Circle()
                     .fill(state.isWatching ? Brand.accent : Brand.textMuted)
@@ -360,14 +353,6 @@ private struct ProjectHomeCard: View {
                     .foregroundColor(Brand.textPrimary)
                     .lineLimit(1)
                 Spacer(minLength: 0)
-                // Open button — navigates into the project's tab view
-                Button(action: onOpen) {
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 9, weight: .medium))
-                        .foregroundColor(Brand.textMuted)
-                }
-                .buttonStyle(.plain)
-                .help("Open project")
             }
 
             // Sparkline or placeholder
@@ -395,14 +380,12 @@ private struct ProjectHomeCard: View {
         .background(Brand.surfaceRaised)
         .overlay(
             RoundedRectangle(cornerRadius: Brand.radiusLg)
-                .stroke(
-                    isSelected ? Brand.accent.opacity(0.6) : Brand.border,
-                    lineWidth: isSelected ? 1.5 : 0.5
-                )
+                .stroke(Brand.border, lineWidth: 0.5)
         )
         .cornerRadius(Brand.radiusLg)
         .contentShape(Rectangle())
-        .onTapGesture { onSelect() }
+        .onTapGesture { onOpen() }
+        .help("Open \(state.project.name)")
     }
 }
 
