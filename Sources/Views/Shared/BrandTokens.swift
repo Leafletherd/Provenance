@@ -29,9 +29,16 @@ enum Brand {
     // MARK: - Interactive states (dynamic)
     static let surfaceSelected  = Color(light: "EDE4D0", dark: "3A352C")  // active tab / selected item
 
-    // MARK: - Floating chrome tokens (§5b, §5c — REV-6)
+    // MARK: - Floating chrome tokens (§5b, §5c — REV-6/7)
     /// Floating toolbar pill background: white in light, warm-elevated dark (#3A352C) in dark.
     static let surfaceFloating  = Color(light: "FFFFFF", dark: "3A352C")
+    /// Pill drop shadow: #000 @10% in light, .clear in dark (value contrast handles elevation in dark).
+    static let pillShadow       = Color(NSColor(name: nil) { appearance in
+        switch appearance.bestMatch(from: [.aqua, .darkAqua]) {
+        case .darkAqua: return NSColor(white: 0, alpha: 0)
+        default:        return NSColor(white: 0, alpha: 0.10)
+        }
+    })
     /// Icon hover fill: ~6% black in light, ~8% white in dark (Apple Mail pattern).
     static let surfaceHover     = Color(NSColor(name: nil) { appearance in
         switch appearance.bestMatch(from: [.aqua, .darkAqua]) {
