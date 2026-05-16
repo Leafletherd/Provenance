@@ -47,6 +47,7 @@ struct SourcesView: View {
                 showAddSheet = false
             }
         }
+        .background(Brand.surfaceBase)
     }
 }
 

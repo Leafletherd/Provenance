@@ -114,5 +114,6 @@ struct ContentView: View {
             .buttonStyle(.plain)
             .help("Connect Project\u{2026}")
         }
+        .padding(.horizontal, Brand.spaceSM)
     }
 }

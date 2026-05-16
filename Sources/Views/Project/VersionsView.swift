@@ -60,6 +60,7 @@ struct VersionsView: View {
         .sheet(item: $selectedSnapshot) { snapshot in
             DiffView(snapshot: snapshot, state: state)
         }
+        .background(Brand.surfaceBase)
     }
 }
 

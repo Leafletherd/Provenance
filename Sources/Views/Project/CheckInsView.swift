@@ -58,6 +58,7 @@ struct CheckInsView: View {
                 editingCheckIn = nil
             }
         }
+        .background(Brand.surfaceBase)
     }
 }
 

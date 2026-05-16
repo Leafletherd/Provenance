@@ -42,16 +42,6 @@ enum ExportFormat: String, CaseIterable {
     }
 }
 
-// MARK: - Recent export record
-
-struct RecentExport: Codable, Identifiable {
-    let id: UUID
-    let format: String          // ExportFormat.rawValue
-    let filename: String
-    let date: Date
-    let outputPath: String      // absolute path for Reveal in Finder
-}
-
 // MARK: - Export view
 
 struct ExportView: View {
@@ -61,7 +51,6 @@ struct ExportView: View {
     @State private var isExporting = false
     @State private var exportConfirmation: String? = nil
     @State private var exportError: String? = nil
-    @State private var recentExports: [RecentExport] = []
     @State private var authorName: String = ""
 
     // Promotion
@@ -77,8 +66,6 @@ struct ExportView: View {
     private var totalSources: Int      { state.sources.count }
     private var includedArtifacts: Int { state.artifacts.filter { $0.exportIncluded }.count }
     private var totalArtifacts: Int    { state.artifacts.count }
-
-    private var userDefaultsKey: String { "recentExports_\(state.project.id.uuidString)" }
 
     var body: some View {
         ScrollView {
@@ -169,20 +156,6 @@ struct ExportView: View {
                     }
                 }
 
-                // ── Recent exports ────────────────────────────────────────────
-                sectionHeader("Recent exports")
-
-                if recentExports.isEmpty {
-                    EmptyStateView(message: "No exports yet.")
-                        .frame(height: 60)
-                } else {
-                    VStack(spacing: 6) {
-                        ForEach(recentExports) { export in
-                            RecentExportRow(export: export)
-                        }
-                    }
-                }
-
                 // ── Divider ───────────────────────────────────────────────────
                 Divider()
                     .overlay(Brand.border)
@@ -218,7 +191,6 @@ struct ExportView: View {
         }
         .background(Brand.surfaceBase)
         .onAppear {
-            loadRecentExports()
             // Default author name from git config
             Task.detached(priority: .background) {
                 let name = await Self.gitAuthorName()
@@ -344,7 +316,6 @@ struct ExportView: View {
                         isExporting = false
                         let hint = "Exported to \(url.lastPathComponent)"
                         exportConfirmation = hint
-                        appendRecentExport(format: fmt, outputURL: url)
                     }
 
                 case .bundle:
@@ -360,7 +331,6 @@ struct ExportView: View {
                         state.reloadEvents()
                         isExporting = false
                         exportConfirmation = "Exported to .provenance.bundle/"
-                        appendRecentExport(format: fmt, outputURL: result.url)
                     }
 
                 case .markdown:
@@ -372,7 +342,6 @@ struct ExportView: View {
                     await MainActor.run {
                         isExporting = false
                         exportConfirmation = "Exported to \(url.lastPathComponent)"
-                        appendRecentExport(format: fmt, outputURL: url)
                     }
 
                 case .authorshipReport:
@@ -386,7 +355,6 @@ struct ExportView: View {
                     await MainActor.run {
                         isExporting = false
                         exportConfirmation = "Exported to \(url.lastPathComponent)"
-                        appendRecentExport(format: fmt, outputURL: url)
                     }
                 }
             } catch {
@@ -421,15 +389,6 @@ struct ExportView: View {
         }
     }
 
-    // MARK: - Recent exports persistence
-
-    private func loadRecentExports() {
-        guard let data = UserDefaults.standard.data(forKey: userDefaultsKey),
-              let decoded = try? JSONDecoder().decode([RecentExport].self, from: data)
-        else { return }
-        recentExports = decoded
-    }
-
     // MARK: - Git author name
 
     private static func gitAuthorName() async -> String {
@@ -446,84 +405,6 @@ struct ExportView: View {
             .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
     }
 
-    private func appendRecentExport(format: ExportFormat, outputURL: URL) {
-        let entry = RecentExport(
-            id: UUID(),
-            format: format.rawValue,
-            filename: outputURL.lastPathComponent,
-            date: Date(),
-            outputPath: outputURL.path
-        )
-        recentExports.insert(entry, at: 0)
-        if recentExports.count > 5 { recentExports = Array(recentExports.prefix(5)) }
-        if let data = try? JSONEncoder().encode(recentExports) {
-            UserDefaults.standard.set(data, forKey: userDefaultsKey)
-        }
-    }
-}
-
-// MARK: - Recent export row
-
-private struct RecentExportRow: View {
-    let export: RecentExport
-
-    private var formatIcon: String {
-        switch export.format {
-        case "pdf":    return "doc.richtext"
-        case "bundle": return "shippingbox"
-        default:       return "doc.plaintext"
-        }
-    }
-
-    private var displayFmt: DateFormatter {
-        let f = DateFormatter()
-        f.dateStyle = .short
-        f.timeStyle = .short
-        return f
-    }
-
-    var body: some View {
-        HStack(spacing: Brand.spaceSM) {
-            Image(systemName: formatIcon)
-                .font(.system(size: 13))
-                .foregroundColor(Brand.accent)
-                .frame(width: 18)
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(export.filename)
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(Brand.textPrimary)
-                    .lineLimit(1)
-                Text(displayFmt.string(from: export.date))
-                    .font(.system(size: 11))
-                    .foregroundColor(Brand.textMuted)
-            }
-
-            Spacer()
-
-            HStack(spacing: Brand.spaceXS) {
-                Button("Reveal") {
-                    let url = URL(fileURLWithPath: export.outputPath)
-                    NSWorkspace.shared.activateFileViewerSelecting([url])
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.mini)
-
-                Button("Open") {
-                    NSWorkspace.shared.open(URL(fileURLWithPath: export.outputPath))
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.mini)
-            }
-        }
-        .padding(Brand.spaceSM)
-        .background(Brand.surfaceSunken.opacity(0.5))
-        .overlay(
-            RoundedRectangle(cornerRadius: Brand.radiusMd)
-                .stroke(Brand.border, lineWidth: 0.5)
-        )
-        .cornerRadius(Brand.radiusMd)
-    }
 }
 
 // MARK: - Stat pill (kept for compatibility with ExportSheet usages)

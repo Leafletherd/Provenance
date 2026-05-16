@@ -126,6 +126,7 @@ struct ArtifactsView: View {
                 seedDetailArtifact = nil
             }
         }
+        .background(Brand.surfaceBase)
     }
 }
 
@@ -258,7 +259,7 @@ struct ArtifactCardView: View {
             .font(.system(size: 12))
         }
         .padding(Brand.spaceMD)
-        .background(Brand.surfaceRaised)
+        .background(Brand.surfaceSunken.opacity(0.5))
         .overlay(
             RoundedRectangle(cornerRadius: Brand.radiusLg)
                 .stroke(Brand.border, lineWidth: 0.5)

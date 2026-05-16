@@ -99,7 +99,16 @@ struct SidebarView: View {
                 }
             }
             .listStyle(.sidebar)
+            .scrollContentBackground(.hidden)
+            .background(Color.clear)
         }
+        .background(
+            LinearGradient(
+                colors: [Brand.surfaceRaised, Brand.surfaceBase],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+        )
         .navigationTitle("Provenance")
         .safeAreaInset(edge: .bottom) {
             HStack(spacing: 4) {

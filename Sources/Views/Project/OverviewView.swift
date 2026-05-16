@@ -178,6 +178,7 @@ struct OverviewView: View {
             }
             .padding(24)
         }
+        .background(Brand.surfaceBase)
         .onAppear {
             projectName = state.project.name
         }
