@@ -287,10 +287,6 @@ struct ExportView: View {
     // MARK: - Export action
 
     private func runExport() {
-        isExporting = true
-        exportConfirmation = nil
-        exportError = nil
-
         let proj     = state.project
         let cis      = state.checkIns
         let srcs     = state.sources
@@ -303,22 +299,16 @@ struct ExportView: View {
         let iStatus  = state.integrityStatus
         let chain    = LedgerIntegrity.readChain(from: state.project)
 
-        Task {
-            do {
-                switch fmt {
+        // F — PR-21: Bundle export writes to .provenance.bundle/ at project root —
+        // no save panel needed (it's a fixed-location handoff for Works).
+        // All other formats present an NSSavePanel so the user picks where to save.
 
-                case .pdf:
-                    let url = try await Task.detached(priority: .userInitiated) {
-                        try ExportService.export(project: proj, checkIns: cis, sources: srcs,
-                                                  artifacts: arts, snapshots: snaps, events: evs)
-                    }.value
-                    await MainActor.run {
-                        isExporting = false
-                        let hint = "Exported to \(url.lastPathComponent)"
-                        exportConfirmation = hint
-                    }
-
-                case .bundle:
+        if fmt == .bundle {
+            isExporting = true
+            exportConfirmation = nil
+            exportError = nil
+            Task {
+                do {
                     let result = try await Task.detached(priority: .userInitiated) {
                         try ExportService.exportBundle(project: proj, checkIns: cis,
                                                        sources: srcs, artifacts: arts)
@@ -332,12 +322,64 @@ struct ExportView: View {
                         isExporting = false
                         exportConfirmation = "Exported to .provenance.bundle/"
                     }
+                } catch {
+                    await MainActor.run {
+                        isExporting = false
+                        exportError = error.localizedDescription
+                    }
+                }
+            }
+            return
+        }
+
+        // For PDF, Markdown, and Authorship Report — present NSSavePanel first.
+        let savePanel = NSSavePanel()
+        savePanel.directoryURL = proj.folderURL    // default to project root
+        savePanel.title = "Export \(proj.name)"
+
+        switch fmt {
+        case .pdf:
+            savePanel.allowedContentTypes = [.pdf]
+            savePanel.nameFieldStringValue = "\(proj.name)-provenance-export.pdf"
+        case .markdown:
+            savePanel.allowedContentTypes = [.plainText]
+            savePanel.nameFieldStringValue = "\(proj.name)-provenance-export.md"
+        case .authorshipReport:
+            savePanel.allowedContentTypes = [.pdf]
+            savePanel.nameFieldStringValue = "\(proj.name)-authorship-report.pdf"
+        case .bundle:
+            break  // handled above
+        }
+
+        guard savePanel.runModal() == .OK, let destURL = savePanel.url else {
+            return  // user cancelled — do nothing
+        }
+
+        isExporting = true
+        exportConfirmation = nil
+        exportError = nil
+
+        Task {
+            do {
+                switch fmt {
+
+                case .pdf:
+                    let url = try await Task.detached(priority: .userInitiated) {
+                        try ExportService.export(project: proj, checkIns: cis, sources: srcs,
+                                                  artifacts: arts, snapshots: snaps, events: evs,
+                                                  to: destURL)
+                    }.value
+                    await MainActor.run {
+                        isExporting = false
+                        exportConfirmation = "Exported to \(url.lastPathComponent)"
+                    }
 
                 case .markdown:
                     let url = try await Task.detached(priority: .userInitiated) {
                         try ExportService.exportMarkdown(project: proj, checkIns: cis,
                                                          sources: srcs, artifacts: arts,
-                                                         snapshots: snaps, events: evs)
+                                                         snapshots: snaps, events: evs,
+                                                         to: destURL)
                     }.value
                     await MainActor.run {
                         isExporting = false
@@ -350,12 +392,16 @@ struct ExportView: View {
                             project: proj, authorName: author,
                             checkIns: cis, sources: srcs, artifacts: arts,
                             manuscripts: mss, events: evs,
-                            integrityStatus: iStatus, chain: chain)
+                            integrityStatus: iStatus, chain: chain,
+                            to: destURL)
                     }.value
                     await MainActor.run {
                         isExporting = false
                         exportConfirmation = "Exported to \(url.lastPathComponent)"
                     }
+
+                case .bundle:
+                    break  // unreachable — handled above
                 }
             } catch {
                 await MainActor.run {

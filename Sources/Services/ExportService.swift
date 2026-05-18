@@ -253,23 +253,29 @@ struct ExportService {
     // MARK: - Markdown export
 
     /// Renders the same content as the PDF report as a single .md file.
-    /// Saved to .ledger/export/<project>-<date>.md.
+    /// F — PR-21: if `destinationURL` is provided (from NSSavePanel), write directly
+    /// there. Otherwise falls back to .ledger/export/ for programmatic callers.
     static func exportMarkdown(
         project: Project,
         checkIns: [CheckIn],
         sources: [Source],
         artifacts: [Artifact],
         snapshots: [Snapshot],
-        events: [LedgerEvent]
+        events: [LedgerEvent],
+        to destinationURL: URL? = nil
     ) throws -> URL {
         let fm = FileManager.default
-        try fm.createDirectory(at: project.exportURL, withIntermediateDirectories: true)
-
-        let dateStr = DateFormatter.localizedString(from: Date(), dateStyle: .short, timeStyle: .none)
-            .replacingOccurrences(of: "/", with: "-")
-        let filename = "\(project.name)-provenance-\(dateStr).md"
-            .replacingOccurrences(of: " ", with: "_")
-        let outputURL = project.exportURL.appendingPathComponent(filename)
+        let outputURL: URL
+        if let dest = destinationURL {
+            outputURL = dest
+        } else {
+            try fm.createDirectory(at: project.exportURL, withIntermediateDirectories: true)
+            let dateStr = DateFormatter.localizedString(from: Date(), dateStyle: .short, timeStyle: .none)
+                .replacingOccurrences(of: "/", with: "-")
+            let filename = "\(project.name)-provenance-\(dateStr).md"
+                .replacingOccurrences(of: " ", with: "_")
+            outputURL = project.exportURL.appendingPathComponent(filename)
+        }
 
         let md = buildMarkdownReport(project: project, checkIns: checkIns, sources: sources,
                                      artifacts: artifacts, snapshots: snapshots, events: events)
@@ -398,6 +404,8 @@ struct ExportService {
     // MARK: - Authorship Report export
 
     /// Delegates to `AuthorshipReportRenderer`.
+    /// F — PR-21: if `destinationURL` is provided (from NSSavePanel), write directly
+    /// there. Otherwise falls back to .ledger/export/ for programmatic callers.
     static func exportAuthorshipReport(
         project: Project,
         authorName: String,
@@ -407,16 +415,21 @@ struct ExportService {
         manuscripts: [Manuscript],
         events: [LedgerEvent],
         integrityStatus: LedgerIntegrity.IntegrityStatus,
-        chain: LedgerChain?
+        chain: LedgerChain?,
+        to destinationURL: URL? = nil
     ) throws -> URL {
         let fm = FileManager.default
-        try fm.createDirectory(at: project.exportURL, withIntermediateDirectories: true)
-
-        let dateStr = DateFormatter.localizedString(from: Date(), dateStyle: .short, timeStyle: .none)
-            .replacingOccurrences(of: "/", with: "-")
-        let filename = "\(project.name)-authorship-\(dateStr).pdf"
-            .replacingOccurrences(of: " ", with: "_")
-        let outputURL = project.exportURL.appendingPathComponent(filename)
+        let outputURL: URL
+        if let dest = destinationURL {
+            outputURL = dest
+        } else {
+            try fm.createDirectory(at: project.exportURL, withIntermediateDirectories: true)
+            let dateStr = DateFormatter.localizedString(from: Date(), dateStyle: .short, timeStyle: .none)
+                .replacingOccurrences(of: "/", with: "-")
+            let filename = "\(project.name)-authorship-\(dateStr).pdf"
+                .replacingOccurrences(of: " ", with: "_")
+            outputURL = project.exportURL.appendingPathComponent(filename)
+        }
 
         try AuthorshipReportRenderer.render(
             to: outputURL,
@@ -435,22 +448,29 @@ struct ExportService {
 
     // MARK: - PDF export (existing)
 
+    /// F — PR-21: if `destinationURL` is provided (from NSSavePanel), write directly
+    /// there. Otherwise falls back to .ledger/export/ for programmatic callers.
     static func export(
         project: Project,
         checkIns: [CheckIn],
         sources: [Source],
         artifacts: [Artifact],
         snapshots: [Snapshot],
-        events: [LedgerEvent]
+        events: [LedgerEvent],
+        to destinationURL: URL? = nil
     ) throws -> URL {
         let fm = FileManager.default
-        try fm.createDirectory(at: project.exportURL, withIntermediateDirectories: true)
-
-        let dateStr = DateFormatter.localizedString(from: Date(), dateStyle: .short, timeStyle: .none)
-            .replacingOccurrences(of: "/", with: "-")
-        let filename = "\(project.name)-provenance-\(dateStr).pdf"
-            .replacingOccurrences(of: " ", with: "_")
-        let outputURL = project.exportURL.appendingPathComponent(filename)
+        let outputURL: URL
+        if let dest = destinationURL {
+            outputURL = dest
+        } else {
+            try fm.createDirectory(at: project.exportURL, withIntermediateDirectories: true)
+            let dateStr = DateFormatter.localizedString(from: Date(), dateStyle: .short, timeStyle: .none)
+                .replacingOccurrences(of: "/", with: "-")
+            let filename = "\(project.name)-provenance-\(dateStr).pdf"
+                .replacingOccurrences(of: " ", with: "_")
+            outputURL = project.exportURL.appendingPathComponent(filename)
+        }
 
         let pageWidth: CGFloat = 612
         let pageHeight: CGFloat = 792

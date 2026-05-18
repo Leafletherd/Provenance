@@ -171,24 +171,24 @@ struct HomeView: View {
                 .disabled(saveDisabled)
             }
 
-            // Text input — PR-20 §C cursor alignment fix.
-            // NSTextView has lineFragmentPadding ~5pt by default, shifting the text cursor
-            // right of the placeholder. TextEditorLineFragmentFixer zeroes it so cursor
-            // and placeholder both start at the same x position (.padding(.horizontal, 4)).
+            // Text input — PR-21 §D cursor alignment fix (supersedes PR-20 §C).
+            // textContainerInset = NSSize(width: 8, height: 8) gives the NSTextView an
+            // 8pt inset on all sides; lineFragmentPadding is zeroed so the cursor sits at
+            // exactly x=8 from the view edge. The placeholder must match at .leading 8.
+            // SwiftUI's .padding() on TextEditor is NOT used — it would compound with
+            // the inset and push the cursor further right than the placeholder.
             ZStack(alignment: .topLeading) {
                 if checkInText.isEmpty {
                     Text("Ready to check in? Type a sentence or two.")
                         .font(.system(size: 13).italic())
                         .foregroundColor(Brand.textMuted)
-                        .padding(.horizontal, 4)
-                        .padding(.vertical, 4)
+                        .padding(.leading, 8)   // matches textContainerInset.width
+                        .padding(.top, 8)       // matches textContainerInset.height
                         .allowsHitTesting(false)
                 }
                 TextEditor(text: $checkInText)
                     .font(.system(size: 13))
                     .scrollContentBackground(.hidden)
-                    .padding(.horizontal, 4)
-                    .padding(.vertical, 4)
                     .background(TextEditorLineFragmentFixer())
             }
             .frame(minHeight: 80, maxHeight: 200)
@@ -336,27 +336,20 @@ private struct StatusChip: View {
     let isSelected: Bool
     let action: () -> Void
 
-    private var color: Color {
-        switch status {
-        case .working:      return Brand.statusWorking
-        case .stuck:        return Brand.statusStuck
-        case .breakthrough: return Brand.statusBreakthrough
-        case .paused:       return Brand.statusPaused
-        case .done:         return Brand.statusDone
-        }
-    }
-
     var body: some View {
+        // B2 — PR-21: selected state uses prov/tint-surface bg + prov/accent text,
+        // NOT per-status color fills. Accent is reserved for CTA buttons and this
+        // single selected-chip indicator. Unselected: clear bg + textSecondary.
         Button(action: action) {
             Text(status.label)
                 .font(.system(size: 10, weight: .medium))
-                .foregroundColor(isSelected ? color : Brand.textMuted)
+                .foregroundColor(isSelected ? Brand.accent : Brand.textSecondary)
                 .padding(.horizontal, Brand.spaceSM)
                 .padding(.vertical, 3)
-                .background(isSelected ? color.opacity(0.12) : Color.clear)
+                .background(isSelected ? Brand.tintSurface : Color.clear)
                 .overlay(
                     RoundedRectangle(cornerRadius: Brand.radiusSm)
-                        .stroke(isSelected ? color.opacity(0.35) : Brand.border, lineWidth: 0.5)
+                        .stroke(isSelected ? Brand.tintBorder : Brand.border, lineWidth: 0.5)
                 )
                 .cornerRadius(Brand.radiusSm)
         }
@@ -459,23 +452,25 @@ private struct HomeStatView: View {
     }
 }
 
-// MARK: - TextEditor cursor alignment fixer (PR-20 §C)
+// MARK: - TextEditor cursor alignment fixer (PR-21 §D)
 //
-// NSTextView has a default lineFragmentPadding of ~5pt that shifts the text cursor
-// to the right of where the placeholder text appears. This NSViewRepresentable zeroes
-// that padding so the cursor and placeholder align at the same horizontal position.
+// Sets lineFragmentPadding = 0 and textContainerInset = NSSize(width: 8, height: 8)
+// so the NSTextView cursor starts at exactly x=8 from the view edge — matching the
+// placeholder's .padding(.leading, 8). SwiftUI's .padding() must NOT be used on the
+// TextEditor alongside this, as it would compound with the inset.
 
 private struct TextEditorLineFragmentFixer: NSViewRepresentable {
     func makeNSView(context: Context) -> NSView { NSView() }
     func updateNSView(_ nsView: NSView, context: Context) {
         DispatchQueue.main.async {
             // Walk up from our background layer through the NSScrollView that backs
-            // SwiftUI's TextEditor, then zero the NSTextContainer's lineFragmentPadding.
+            // SwiftUI's TextEditor, then zero lineFragmentPadding and apply inset.
             var view: NSView? = nsView.superview
             while let v = view {
                 if let scrollView = v as? NSScrollView,
                    let textView = scrollView.documentView as? NSTextView {
                     textView.textContainer?.lineFragmentPadding = 0
+                    textView.textContainerInset = NSSize(width: 8, height: 8)
                     return
                 }
                 view = v.superview

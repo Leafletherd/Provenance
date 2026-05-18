@@ -51,6 +51,12 @@ struct ContentView: View {
         // PR-20 §B — prov/accent tint propagates to all .borderedProminent buttons and
         // system UI tint throughout the app, replacing system blue.
         .tint(Brand.accent)
+        // C — PR-21: Force toolbar background on the SwiftUI side in addition to the
+        // NSWindow-level titlebarAppearsTransparent + backgroundColor set in
+        // ProvenanceWindowConfigurator. Without both, macOS can briefly flash a white
+        // toolbar on initial display or when navigating between views.
+        .toolbarBackground(Brand.titlebarBg, for: .windowToolbar)
+        .toolbarBackground(.visible, for: .windowToolbar)
         // Title bar is transparent (set in ProvenanceWindowConfigurator below) so each
         // column's own background paints through it — body shows surfaceBase tan,
         // sidebar shows surfaceSidebar white.

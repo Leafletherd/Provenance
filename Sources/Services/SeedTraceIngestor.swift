@@ -50,25 +50,21 @@ enum SeedTraceIngestor {
 
     // MARK: - Folder scan
 
-    /// Walk `root` for `*.seed-trace.json` files, skipping `.ledger`, `.git`,
-    /// hidden files, and package descendants.
+    /// Scan the project's `.ledger/` folder for `*.seed-trace.json` files.
+    ///
+    /// PR-21 §E: seed-trace files are now stored INSIDE `.ledger/` (canonical location).
+    /// Files at the project root are migrated to `.ledger/` by ProjectState before this
+    /// scan runs. We no longer walk the entire project tree — only `.ledger/`.
     static func scanFolder(at root: URL) -> [URL] {
-        var found: [URL] = []
-        let skipDirs: Set<String> = [".ledger", ".git", ".build", "node_modules", ".Trash"]
+        let ledgerURL = root.appendingPathComponent(".ledger")
         guard let enumerator = FileManager.default.enumerator(
-            at: root,
+            at: ledgerURL,
             includingPropertiesForKeys: [.isDirectoryKey],
-            options: [.skipsHiddenFiles, .skipsPackageDescendants]
+            options: [.skipsPackageDescendants]
         ) else { return [] }
 
+        var found: [URL] = []
         for case let url as URL in enumerator {
-            let isDir = (try? url.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true
-            if isDir {
-                if skipDirs.contains(url.lastPathComponent) {
-                    enumerator.skipDescendants()
-                }
-                continue
-            }
             if url.lastPathComponent.hasSuffix(".seed-trace.json") {
                 found.append(url)
             }

@@ -28,6 +28,8 @@ class ProjectState: ObservableObject, Identifiable {
     private var sceneBoardCache: [String: Data] = [:]
     /// Guards the once-per-session folder scan for pre-existing seed-trace sidecars.
     private var seedTraceScanDone = false
+    /// Guards concurrent ingest calls for the same file path within a session.
+    private var ingestingPaths = Set<String>()
 
     init(project: Project) {
         self.id = project.id
@@ -167,6 +169,10 @@ class ProjectState: ObservableObject, Identifiable {
     // MARK: - Seed-trace ingestion
 
     private func ingestSeedTrace(at url: URL) {
+        // A1/A3 — guard: if a concurrent Task already started ingesting this path,
+        // skip. Multiple FSEvents firing for the same file before any write is seen
+        // would otherwise each append the same artifacts.
+        guard ingestingPaths.insert(url.path).inserted else { return }
         let proj = project
         Task.detached(priority: .userInitiated) { [weak self] in
             let result = SeedTraceIngestor.ingest(fileURL: url, project: proj)
@@ -183,7 +189,12 @@ class ProjectState: ObservableObject, Identifiable {
                         type: .seedPromoted, detail: detail,
                         to: proj, metadata: metadata)
                 }
+                // A1 — dedup: skip artifacts already present (same title + type)
                 for artifact in result.artifacts {
+                    let alreadyPresent = self.artifacts.contains {
+                        $0.title == artifact.title && $0.type == artifact.type
+                    }
+                    guard !alreadyPresent else { continue }
                     self.artifacts.append(artifact)
                 }
                 if !result.artifacts.isEmpty {
@@ -224,8 +235,25 @@ class ProjectState: ObservableObject, Identifiable {
 
         let proj = project
         let folderURL = project.folderURL
+        let ledgerURL = project.ledgerURL
 
         Task.detached(priority: .background) { [weak self] in
+            // E — Migration: move any *.seed-trace.json files at the project root
+            // into .ledger/, which is now the canonical storage location.
+            let fm = FileManager.default
+            if let rootContents = try? fm.contentsOfDirectory(at: folderURL,
+                                                               includingPropertiesForKeys: nil) {
+                for url in rootContents where url.lastPathComponent.hasSuffix(".seed-trace.json") {
+                    try? fm.createDirectory(at: ledgerURL, withIntermediateDirectories: true)
+                    let dest = ledgerURL.appendingPathComponent(url.lastPathComponent)
+                    if !fm.fileExists(atPath: dest.path) {
+                        try? fm.moveItem(at: url, to: dest)
+                    } else {
+                        try? fm.removeItem(at: url)
+                    }
+                }
+            }
+
             let urls = SeedTraceIngestor.scanFolder(at: folderURL)
             guard !urls.isEmpty else { return }
 
@@ -249,7 +277,14 @@ class ProjectState: ObservableObject, Identifiable {
                     LedgerWriter.appendEvent(type: .seedPromoted, detail: detail,
                                             to: proj, metadata: metadata)
                 }
-                self.artifacts.append(contentsOf: capturedArtifacts)
+                // A2 — dedup: skip artifacts already present before appending
+                for artifact in capturedArtifacts {
+                    let alreadyPresent = self.artifacts.contains {
+                        $0.title == artifact.title && $0.type == artifact.type
+                    }
+                    guard !alreadyPresent else { continue }
+                    self.artifacts.append(artifact)
+                }
                 if !capturedArtifacts.isEmpty {
                     try? LedgerWriter.writeArtifacts(self.artifacts, to: proj)
                 }

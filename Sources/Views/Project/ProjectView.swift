@@ -97,7 +97,8 @@ private struct TabButton: View {
         Button(action: action) {
             Text(tab.rawValue)
                 .font(.system(size: 13, weight: isSelected ? .semibold : .regular))
-                .foregroundColor(isSelected ? Brand.accent : Brand.textSecondary)
+                // B1 — PR-21: selected tab text uses textPrimary (near-black), not accent green.
+                .foregroundColor(isSelected ? Brand.textPrimary : Brand.textSecondary)
                 .padding(.horizontal, 14)
                 .padding(.vertical, 8)
                 .background(
