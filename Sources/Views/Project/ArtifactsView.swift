@@ -259,7 +259,9 @@ struct ArtifactCardView: View {
             .font(.system(size: 12))
         }
         .padding(Brand.spaceMD)
-        .background(Brand.surfaceSunken.opacity(0.5))
+        // Tint cell background — per-app accent tint (teal-50 for Provenance)
+        // per the brand color spec's tint-surface convention.
+        .background(Brand.accentDim)
         .overlay(
             RoundedRectangle(cornerRadius: Brand.radiusLg)
                 .stroke(Brand.border, lineWidth: 0.5)

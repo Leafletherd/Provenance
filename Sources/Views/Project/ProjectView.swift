@@ -22,6 +22,9 @@ struct ProjectView: View {
             // Sits on Brand.surfaceBase (via outer VStack background) so there
             // is no separate white-strip chrome above the body — the tab row
             // blends into the same tan surface as the content panels (§3a.ii).
+            // Tab bar — per user directive: titlebar accent wash treatment.
+            // Background = titlebarBg (surfaceSidebar + 5% prov-tint per spec § 00).
+            // Bottom = 0.5px borderUI hairline to separate from content body.
             HStack(spacing: 0) {
                 ForEach(ProjectTab.allCases, id: \.self) { tab in
                     TabButton(
@@ -36,8 +39,13 @@ struct ProjectView: View {
             .padding(.horizontal, 12)
             .padding(.top, 8)
             .padding(.bottom, 4)
-
-            Divider()
+            .background(Brand.titlebarBg)
+            .overlay(
+                Rectangle()
+                    .fill(Brand.border)
+                    .frame(height: 0.5),
+                alignment: .bottom
+            )
 
             // ── Content ───────────────────────────────────────────────────
             Group {

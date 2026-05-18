@@ -30,6 +30,7 @@ struct CheckInsView: View {
                     ForEach(state.checkIns.reversed()) { checkIn in
                         CheckInCardView(checkIn: checkIn, state: state)
                             .listRowInsets(EdgeInsets(top: 6, leading: 12, bottom: 6, trailing: 12))
+                            .listRowBackground(Color.clear)
                             .contentShape(Rectangle())
                             .onTapGesture(count: 2) {
                                 editingCheckIn = checkIn
@@ -37,6 +38,8 @@ struct CheckInsView: View {
                     }
                 }
                 .listStyle(.inset)
+                .scrollContentBackground(.hidden)
+                .background(Brand.surfaceBase)
             }
         }
         .sheet(isPresented: $showAddSheet) {
@@ -113,7 +116,10 @@ struct CheckInCardView: View {
             .font(.system(size: 12))
         }
         .padding(Brand.spaceMD)
-        .background(Brand.surfaceSunken.opacity(0.5))
+        // Tint cell background — per-app accent tint (teal-50 for Provenance)
+        // signals these as Provenance-owned entries, per the brand color spec's
+        // tint-surface convention.
+        .background(Brand.accentDim)
         .overlay(
             RoundedRectangle(cornerRadius: Brand.radiusMd)
                 .stroke(Brand.border, lineWidth: 0.5)

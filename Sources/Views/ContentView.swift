@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 
 struct ContentView: View {
     @EnvironmentObject var appState: AppState
@@ -7,6 +8,8 @@ struct ContentView: View {
         NavigationSplitView {
             SidebarView()
                 .environmentObject(appState)
+                // Apple-Mail-style sidebar width — ~200pt typical, 180 min, 320 max.
+                .navigationSplitViewColumnWidth(min: 180, ideal: 220, max: 320)
         } detail: {
             ZStack {
                 if appState.isHomeSelected || appState.selectedProjectID == nil {
@@ -45,17 +48,24 @@ struct ContentView: View {
                 }
             }
         }
-        // §5b — toolbar background = surfaceBase so the floating pill reads as elevated over it.
-        // .visible forces the background to render even when the toolbar has no title.
-        // This also eliminates the old-chrome flash-back: the background is now always explicit.
-        .toolbarBackground(Brand.surfaceBase, for: .windowToolbar)
-        .toolbarBackground(.visible, for: .windowToolbar)
+        // Title bar is transparent (set in ProvenanceWindowConfigurator below) so each
+        // column's own background paints through it — body shows surfaceBase tan,
+        // sidebar shows surfaceSidebar white. The previous `.toolbarBackground(surfaceBase)`
+        // painted TAN over the entire title bar including the sidebar column, which is
+        // why the sidebar's white kept appearing to start below the title bar.
         // App-level toolbar — always visible regardless of which pane is active.
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 pill
             }
         }
+        // Window-level config: hide the title-bar separator hairline (the "shadow"
+        // visible at the top of the body) and let the body color show through.
+        .background(
+            ProvenanceWindowConfigurator()
+                .frame(width: 0, height: 0)
+                .allowsHitTesting(false)
+        )
         // provenance://open?path=… for a folder not yet connected
         .alert("Connect Project?", isPresented: Binding(
             get:  { appState.pendingConnectURL != nil },
@@ -95,5 +105,23 @@ struct ContentView: View {
             }
         }
         .help("Connect Project\u{2026}")
+    }
+}
+
+// Makes the title bar transparent and sets the window background to surfaceBase
+// so the body's color shows through the title bar over the body region. The
+// sidebar column has its own .background(Brand.surfaceSidebar.ignoresSafeArea())
+// which paints white through the title bar over the sidebar region.
+private struct ProvenanceWindowConfigurator: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSView { NSView() }
+    func updateNSView(_ nsView: NSView, context: Context) {
+        guard let window = nsView.window else { return }
+        if #available(macOS 12.0, *) { window.titlebarSeparatorStyle = .none }
+        window.titlebarAppearsTransparent = true
+        // Per spec § 00: titlebar = surfaceSidebar + 5% app-tint wash. The
+        // sidebar column's own .background(surfaceSidebar.ignoresSafeArea())
+        // paints through the transparent titlebar for the sidebar region;
+        // the body region of the titlebar gets the tinted titlebarBg.
+        window.backgroundColor = NSColor(Brand.titlebarBg)
     }
 }

@@ -16,6 +16,19 @@ cp ".build/release/${PRODUCT}" "${APP}/Contents/MacOS/${PRODUCT}"
 cp "Sources/Resources/Info.plist" "${APP}/Contents/Info.plist"
 cp "Sources/Resources/provenance.icns" "${APP}/Contents/Resources/provenance.icns"
 
+# Compile xcassets Color Sets → Assets.car
+if [ -d "Sources/Resources/Assets.xcassets" ]; then
+    echo "→ Compiling asset catalog…"
+    xcrun actool \
+        --output-format human-readable-text \
+        --notices --warnings \
+        --platform macosx \
+        --minimum-deployment-target 13.0 \
+        --target-device mac \
+        --compile "${APP}/Contents/Resources" \
+        "Sources/Resources/Assets.xcassets" 2>&1 | grep -E "error:|warning:" || true
+fi
+
 echo "→ Ad-hoc code signing…"
 codesign --force --deep --sign - "${APP}"
 

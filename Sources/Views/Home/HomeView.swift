@@ -59,8 +59,14 @@ struct HomeView: View {
                 HStack(spacing: 0) {
                     Spacer(minLength: 0)
                     VStack(alignment: .leading, spacing: Brand.spaceMD) {
+                        // PR-18 §2a — greeting in Palatino italic light (the
+                        // in-app stand-in for Fraunces, which is web-only and
+                        // intentionally NOT bundled per §3). Matches Seed's
+                        // SeedHomeView greeting treatment exactly so the two
+                        // home screens read as obvious siblings.
                         Text(greeting)
-                            .font(.system(size: 22, weight: .bold))
+                            .font(.custom("Palatino-Italic", size: 34))
+                            .fontWeight(.light)
                             .foregroundColor(Brand.textPrimary)
 
                         Text(contextualPrompt)
@@ -73,17 +79,14 @@ struct HomeView: View {
                     Spacer(minLength: 0)
                 }
 
-                Divider()
-                    .overlay(Brand.border)
-
-                // Project cards strip
-                projectStrip
-
-                Divider()
-                    .overlay(Brand.border)
-
-                // This-week stats
-                weekStats
+                // All subsequent sections share the SAME centered 560pt column so
+                // they reposition together with the greeting/composer on resize.
+                centeredColumn {
+                    Divider().overlay(Brand.border)
+                    projectStrip
+                    Divider().overlay(Brand.border)
+                    weekStats
+                }
             }
             .padding(Brand.spaceXL)
         }
@@ -139,23 +142,37 @@ struct HomeView: View {
 
                 Spacer()
 
+                // PR-18 §2c — primary action button mirrors Seed's Plant
+                // button: filled Brand.accent (prov/accent #1D9E75) capsule
+                // with cream (surfaceBase #FAF6EF) label. Manual styling so
+                // both colors stay pinned regardless of system bordered-
+                // prominent rendering.
+                let saveDisabled = checkInText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                    || targetProjectID == nil
+                    || isSaving
                 Button {
                     saveCheckIn()
                 } label: {
-                    if savedFeedback {
-                        Label("Saved", systemImage: "checkmark")
-                            .font(.system(size: 13, weight: .medium))
-                    } else {
-                        Text("Save")
-                            .font(.system(size: 13, weight: .medium))
+                    Group {
+                        if savedFeedback {
+                            Label("Saved", systemImage: "checkmark")
+                                .font(.system(size: 13, weight: .medium))
+                        } else {
+                            Text("Save")
+                                .font(.system(size: 13, weight: .medium))
+                        }
                     }
+                    .foregroundColor(Brand.surfaceBase)
+                    .padding(.horizontal, 18)
+                    .padding(.vertical, 6)
+                    .background(
+                        Capsule().fill(Brand.accent)
+                    )
                 }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.small)
+                .buttonStyle(.plain)
                 .keyboardShortcut(.return, modifiers: .command)
-                .disabled(checkInText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                          || targetProjectID == nil
-                          || isSaving)
+                .disabled(saveDisabled)
+                .opacity(saveDisabled ? 0.4 : 1.0)
             }
 
             // Text input
@@ -220,6 +237,20 @@ struct HomeView: View {
             HomeStatView(value: sources,  label: "Sources added")
             HomeStatView(value: snapshots, label: "Snapshots saved")
             Spacer()
+        }
+    }
+
+    // Wrap any content in the same centered 560pt column used by the greeting
+    // block, so all sections of the Home page reposition as a unit on resize.
+    @ViewBuilder
+    private func centeredColumn<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
+        HStack(spacing: 0) {
+            Spacer(minLength: 0)
+            VStack(alignment: .leading, spacing: Brand.spaceXL) {
+                content()
+            }
+            .frame(maxWidth: 560)
+            Spacer(minLength: 0)
         }
     }
 
@@ -413,8 +444,13 @@ private struct HomeStatView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
+            // PR-18 §2b — stat numbers in Palatino roman 28pt (editorial
+            // values, not dashboard numbers). Mirrors Seed SeedHomeView's
+            // HomeStatView so the two home screens stay structurally
+            // identical. Label stays system UI.
             Text("\(value)")
-                .font(.system(size: 22, weight: .bold))
+                .font(.custom("Palatino", size: 28))
+                .fontWeight(.regular)
                 .foregroundColor(Brand.textPrimary)
             Text(label)
                 .font(.system(size: 12))

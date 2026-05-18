@@ -104,6 +104,7 @@ struct LedgerView: View {
                         let isPreChain = globalIdx < chainBoundaryIndex
                         LedgerEventRowView(event: event, displayFmt: displayFmt, isPreChain: isPreChain)
                             .listRowInsets(EdgeInsets(top: 3, leading: 12, bottom: 3, trailing: 12))
+                            .listRowBackground(Color.clear)
                             .contentShape(Rectangle())
                             .onTapGesture {
                                 if event.type == .seedPromoted && event.metadata != nil {
@@ -115,6 +116,8 @@ struct LedgerView: View {
                     }
                 }
                 .listStyle(.inset)
+                .scrollContentBackground(.hidden)
+                .background(Brand.surfaceBase)
             }
         }
         .onAppear {

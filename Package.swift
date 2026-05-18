@@ -16,7 +16,7 @@ let package = Package(
         .executableTarget(
             name: "Provenance",
             path: "Sources",
-            exclude: ["Resources/Info.plist"],
+            exclude: ["Resources/Info.plist", "Resources/Assets.xcassets"],
             linkerSettings: [
                 .linkedFramework("CoreServices"),
                 .linkedFramework("PDFKit"),

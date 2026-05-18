@@ -5,6 +5,26 @@ extension Notification.Name {
     static let connectProjectRequested = Notification.Name("connectProjectRequested")
 }
 
+// Walks up the view hierarchy and forces the sidebar's NSVisualEffectView
+// (the translucent material macOS paints in the sidebar column) into an
+// inactive .windowBackground state — letting SwiftUI's .background fill in.
+private struct SidebarMaterialKiller: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSView { NSView() }
+    func updateNSView(_ nsView: NSView, context: Context) {
+        DispatchQueue.main.async {
+            var v: NSView? = nsView
+            while let current = v {
+                if let effect = current as? NSVisualEffectView {
+                    effect.material = .windowBackground
+                    effect.state = .inactive
+                    effect.blendingMode = .behindWindow
+                }
+                v = current.superview
+            }
+        }
+    }
+}
+
 // MARK: - Sidebar selection model
 
 enum SidebarItem: Hashable {
@@ -45,7 +65,22 @@ struct SidebarView: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
+        // ZStack lets the surfaceSidebar color paint the ENTIRE sidebar column
+        // (including under the title bar / traffic lights) regardless of the
+        // safe-area constraints SwiftUI applies to NavigationSplitView columns.
+        // Combined with SidebarMaterialKiller (defeats NSVisualEffectView).
+        ZStack(alignment: .top) {
+            Brand.surfaceSidebar
+                .ignoresSafeArea()
+            SidebarMaterialKiller()
+                .frame(width: 0, height: 0)
+                .allowsHitTesting(false)
+
+            VStack(spacing: 0) {
+            // Explicit top spacer — pushes the List below the title-bar region
+            // so the first row ("Home") doesn't sit underneath the traffic lights.
+            Color.clear.frame(height: 28)
+
             List(selection: selectionBinding) {
                 // Home row
                 Label {
@@ -62,6 +97,9 @@ struct SidebarView: View {
                         ForEach(appState.projectStates) { state in
                             ProjectRowView(state: state)
                                 .tag(SidebarItem.project(state.project.id))
+                                // Suppress system row highlight — the row paints its own
+                                // tintSurface background when isSelected.
+                                .listRowBackground(Color.clear)
                                 .contextMenu {
                                     // Missing-state actions at top
                                     if !state.resolutionStatus.isAccessible {
@@ -101,15 +139,8 @@ struct SidebarView: View {
             .listStyle(.sidebar)
             .scrollContentBackground(.hidden)
             .background(Color.clear)
+            }
         }
-        .background(
-            LinearGradient(
-                colors: [Brand.surfaceRaised, Brand.surfaceBase],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-        )
-        .navigationTitle("Provenance")
         .safeAreaInset(edge: .bottom) {
             HStack(spacing: 2) {
                 // §5c hover state via shared IconButton
@@ -133,7 +164,7 @@ struct SidebarView: View {
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 6)
-            .background(.bar)
+            .background(Brand.surfaceSidebar)
         }
         .onReceive(NotificationCenter.default.publisher(for: .connectProjectRequested)) { _ in
             openFolderPicker()
@@ -236,8 +267,12 @@ struct SidebarView: View {
 
 struct ProjectRowView: View {
     @ObservedObject var state: ProjectState
+    @EnvironmentObject var appState: AppState
 
     private var isMissing: Bool { !state.resolutionStatus.isAccessible }
+    private var isSelected: Bool {
+        !appState.isHomeSelected && appState.selectedProjectID == state.project.id
+    }
 
     private var missingSubtext: String? {
         switch state.resolutionStatus {
@@ -277,8 +312,20 @@ struct ProjectRowView: View {
                         .lineLimit(1)
                 }
             }
+            Spacer(minLength: 0)
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, 6)
+        .padding(.horizontal, 8)
+        // Per user directive: selected sidebar row gets prov/tint-surface bg
+        // (#E4F2EE light / #181F1C dark) instead of the flat system highlight.
+        .background(
+            RoundedRectangle(cornerRadius: Brand.radiusMd)
+                .fill(isSelected ? Brand.tintSurface : Color.clear)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: Brand.radiusMd)
+                .stroke(isSelected ? Brand.tintBorder : Color.clear, lineWidth: 0.5)
+        )
     }
 }
 

@@ -8,9 +8,11 @@ struct FloatingPill<Content: View>: View {
             content()
         }
         .padding(.horizontal, 12)
-        .padding(.vertical, 6)
+        .padding(.vertical, 5)
+        // Feathered shadow — larger radius for soft falloff, lower opacity for
+        // subtlety. Identical across all four apps for visual unity.
         .background(Capsule().fill(Brand.surfaceFloating))
-        .shadow(color: Brand.pillShadow, radius: 8, x: 0, y: 2)
+        .shadow(color: Brand.pillShadow, radius: 8, x: 0, y: 1)
     }
 }
 
@@ -20,6 +22,7 @@ struct PillIconButton: View {
     let isActive: Bool
     let action: () -> Void
     @State private var hovering = false
+    @Environment(\.isEnabled) private var isEnabled
 
     init(systemImage: String, isActive: Bool = false, action: @escaping () -> Void) {
         self.systemImage = systemImage
@@ -41,20 +44,26 @@ struct PillIconButton: View {
                 else if let asset = assetName { Image(asset).renderingMode(.template) }
             }
             .font(.system(size: 14, weight: .medium))
-            .foregroundColor(isActive ? Brand.accent : Brand.textSecondary)
+            // Per-app accent ALWAYS — explicit opacity on disabled defeats SwiftUI's greyout.
+            .foregroundColor(Brand.accent)
+            .opacity(isEnabled ? (isActive ? 1.0 : 0.85) : 0.35)
             .frame(width: 28, height: 28)
-            .background(Circle().fill(hovering ? Brand.surfaceHover : Color.clear))
+            .background(Circle().fill(hovering && isEnabled ? Brand.surfaceHover : Color.clear))
             .contentShape(Circle())
         }
         .buttonStyle(.plain)
-        .onHover { hovering = $0 }
+        .onHover { if isEnabled { hovering = $0 } }
     }
 }
 
 struct PillDivider: View {
     var body: some View {
         Rectangle()
-            .fill(Brand.border)
+            // Brand.textMuted instead of Brand.border because in dark mode
+            // Brand.border (#3A352C) is identical to surfaceFloating (#3A352C),
+            // making the divider invisible. textMuted gives visible contrast
+            // against the pill bg in both light and dark modes.
+            .fill(Brand.textMuted.opacity(0.5))
             .frame(width: 1, height: 14)
             .padding(.horizontal, 2)
     }
@@ -66,6 +75,7 @@ struct PillPrimaryAction: View {
     let label: String
     let action: () -> Void
     @State private var hovering = false
+    @Environment(\.isEnabled) private var isEnabled
 
     init(systemImage: String, label: String, action: @escaping () -> Void) {
         self.systemImage = systemImage
@@ -87,17 +97,19 @@ struct PillPrimaryAction: View {
                     if let sys = systemImage { Image(systemName: sys) }
                     else if let asset = assetName { Image(asset).renderingMode(.template) }
                 }
-                .font(.system(size: 14, weight: .medium))
+                .font(.system(size: 13, weight: .medium))
                 Text(label)
-                    .font(.system(size: 14, weight: .medium))
+                    .font(.system(size: 13, weight: .medium))
             }
-            .foregroundColor(Brand.textBrand)
+            // Per-app accent — explicit opacity on disabled defeats SwiftUI's greyout.
+            .foregroundColor(Brand.accent)
+            .opacity(isEnabled ? 1.0 : 0.4)
             .padding(.horizontal, 8)
-            .padding(.vertical, 4)
-            .background(Capsule().fill(hovering ? Brand.surfaceHover : Color.clear))
+            .padding(.vertical, 3)
+            .background(Capsule().fill(hovering && isEnabled ? Brand.surfaceHover : Color.clear))
             .contentShape(Capsule())
         }
         .buttonStyle(.plain)
-        .onHover { hovering = $0 }
+        .onHover { if isEnabled { hovering = $0 } }
     }
 }

@@ -14,29 +14,34 @@ import AppKit
 
 enum Brand {
 
-    // MARK: - Surfaces (dynamic light/dark)
-    static let surfaceBase   = Color(light: "FAF6EF", dark: "1A1916")  // tan-50 / warm near-black
-    static let surfaceRaised = Color(light: "FFFFFF", dark: "26241F")  // card bg
-    static let surfaceSunken = Color(light: "F0E8D5", dark: "14130F")  // inputs, wells
-    static let border        = Color(light: "DFD0B0", dark: "3A352C")  // 0.5px borders
+    // MARK: - Surfaces — loaded from xcassets Color Sets (per ui_color_assignment.html).
+    // The asset catalog is compiled to Assets.car by actool in make-app.sh.
+    // SwiftUI's Color("name", bundle: .main) reads from that catalog at runtime
+    // and properly adapts to light/dark mode via NSColor.systemBackground semantics.
+    static let surfaceBase     = Color("surfaceBase", bundle: .main)
+    static let surfaceSidebar  = Color("surfaceSidebar", bundle: .main)
+    static let surfaceRaised   = Color("surfaceRaised", bundle: .main)
+    static let surfaceSunken   = Color("surfaceSunken", bundle: .main)
+    static let surfaceSelected = Color("surfaceSelected", bundle: .main)
+    static let border          = Color("borderUI", bundle: .main)
+    static let borderSubtle    = Color("borderSubtle", bundle: .main)
 
-    // MARK: - Text (dynamic light/dark)
-    static let textPrimary   = Color(light: "2E2D2A", dark: "F0EBE3")  // slate-800 / warm white
-    static let textSecondary = Color(light: "5A5854", dark: "B8B2A8")  // slate-600 / warm mid-gray
-    static let textMuted     = Color(light: "8C8A84", dark: "6B665E")  // slate-400 / warm dim
-    static let textBrand     = Color(light: "8A6E42", dark: "C7A56C")  // tan-600 / lifted for dark
-
-    // MARK: - Interactive states (dynamic)
-    static let surfaceSelected  = Color(light: "EDE4D0", dark: "3A352C")  // active tab / selected item
+    // MARK: - Text
+    static let textPrimary   = Color("textPrimary", bundle: .main)
+    static let textSecondary = Color("textSecondary", bundle: .main)
+    static let textMuted     = Color("textMuted", bundle: .main)
+    static let textBrand     = Color("textBrand", bundle: .main)
 
     // MARK: - Floating chrome tokens (§5b, §5c — REV-6/7)
-    /// Floating toolbar pill background: white in light, warm-elevated dark (#3A352C) in dark.
-    static let surfaceFloating  = Color(light: "FFFFFF", dark: "3A352C")
+    /// Floating toolbar pill background — matches surface-raised per spec.
+    static let surfaceFloating  = Color("surfaceFloating", bundle: .main)
+    /// Titlebar background — surfaceSidebar + 5% per-app tint wash (per spec § 00).
+    static let titlebarBg       = Color("titlebarBg", bundle: .main)
     /// Pill drop shadow: #000 @10% in light, .clear in dark (value contrast handles elevation in dark).
     static let pillShadow       = Color(NSColor(name: nil) { appearance in
         switch appearance.bestMatch(from: [.aqua, .darkAqua]) {
         case .darkAqua: return NSColor(white: 0, alpha: 0)
-        default:        return NSColor(white: 0, alpha: 0.10)
+        default:        return NSColor(white: 0, alpha: 0.05)
         }
     })
     /// Icon hover fill: ~6% black in light, ~8% white in dark (Apple Mail pattern).
@@ -47,11 +52,14 @@ enum Brand {
         }
     })
 
-    // MARK: - Provenance Accent (single-hex — works in both modes)
-    static let accent        = Color(hex: "1D9E75")  // teal-400
-    static let accentDark    = Color(hex: "186B56")  // teal-600
-    static let accentLight   = Color(hex: "2DC490")  // icon gradient top
-    static let accentDim     = Color(hex: "E4F2EE")  // teal-50 — tinted well
+    // MARK: - Provenance Accent + tint — loaded from xcassets
+    static let accent      = Color("accent", bundle: .main)
+    static let accentDark  = Color("accentDark", bundle: .main)
+    static let accentLight = Color(hex: "2DC490")  // icon gradient top — single hex, not adaptive
+    static let tintSurface = Color("tintSurface", bundle: .main)
+    static let tintBorder  = Color("tintBorder", bundle: .main)
+    /// Legacy alias used in existing code — points to new tintSurface.
+    static let accentDim   = tintSurface
 
     // MARK: - Radii (as CGFloat for use with .cornerRadius / clipShape)
     static let radiusSm: CGFloat =   3
