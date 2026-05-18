@@ -30,8 +30,11 @@ struct OverviewView: View {
                     Text("Display Name")
                         .font(.system(size: 12))
                         .foregroundColor(Brand.textSecondary)
+                    // PR-19 §4a — project display name in New York 22pt regular.
+                    // System-serif fallback if "New York" PostScript lookup fails.
                     TextField("Display name", text: $projectName)
-                        .font(.system(size: 22, weight: .bold))
+                        .font(.custom("New York", size: 22))
+                        .fontWeight(.regular)
                         .textFieldStyle(.plain)
                         .onChange(of: projectName) { newValue in
                             nameDebounceTask?.cancel()
@@ -99,8 +102,10 @@ struct OverviewView: View {
                 // Editable context fields
                 VStack(alignment: .leading, spacing: 12) {
                     HStack {
+                        // PR-19 §4d — section heading in New York 15pt medium.
                         Text("Project Context")
-                            .font(.system(size: 18, weight: .semibold))
+                            .font(.custom("New York", size: 15))
+                            .fontWeight(.medium)
                         Spacer()
                         Button("Edit Context") {
                             medium = state.project.medium ?? ""
@@ -135,8 +140,10 @@ struct OverviewView: View {
                 // Manuscripts section
                 VStack(alignment: .leading, spacing: 10) {
                     HStack {
+                        // PR-19 §4d — section heading in New York 15pt medium.
                         Text("Manuscripts")
-                            .font(.system(size: 18, weight: .semibold))
+                            .font(.custom("New York", size: 15))
+                            .fontWeight(.medium)
                         Spacer()
                         Button {
                             state.scanManuscripts()
@@ -220,12 +227,16 @@ struct StatBadge: View {
 
     var body: some View {
         VStack(spacing: 2) {
+            // PR-19 §4b — activity stat numbers in Palatino roman 24pt
+            // (editorial values, mirrors home's HomeStatView treatment).
             Text("\(count)")
-                .font(.system(size: 22, weight: .bold))
+                .font(.custom("Palatino", size: 24))
+                .fontWeight(.regular)
                 .foregroundColor(Brand.textPrimary)
+            // Label stays system UI at text/secondary (#5A5854) per spec §4b.
             Text(label)
                 .font(.system(size: 10))
-                .foregroundColor(Brand.textMuted)
+                .foregroundColor(Brand.textSecondary)
         }
         .padding(.horizontal, Brand.spaceMD)
         .padding(.vertical, Brand.spaceSM)
@@ -263,7 +274,8 @@ struct ContextSheetView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text("Project Context")
-                .font(.system(size: 18, weight: .semibold))
+                .font(.custom("New York", size: 18))
+                .fontWeight(.semibold)
 
             VStack(alignment: .leading, spacing: 4) {
                 Text("Medium")
@@ -457,7 +469,8 @@ struct SetTargetSheet: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text("Set Target Word Count")
-                .font(.system(size: 18, weight: .semibold))
+                .font(.custom("New York", size: 18))
+                .fontWeight(.semibold)
             Text(title)
                 .font(.system(size: 15, weight: .medium))
                 .foregroundColor(Brand.textMuted)

@@ -97,9 +97,22 @@ struct SidebarView: View {
                         ForEach(appState.projectStates) { state in
                             ProjectRowView(state: state)
                                 .tag(SidebarItem.project(state.project.id))
-                                // Suppress system row highlight — the row paints its own
-                                // tintSurface background when isSelected.
-                                .listRowBackground(Color.clear)
+                                // PR-19 §3d — prov/tintSurface bg + 0.5pt tintBorder left stroke
+                                // when selected; transparent otherwise. Replaces system grey highlight.
+                                .listRowBackground(
+                                    Group {
+                                        if appState.selectedProjectID == state.project.id {
+                                            Brand.tintSurface
+                                                .overlay(alignment: .leading) {
+                                                    Rectangle()
+                                                        .fill(Brand.tintBorder)
+                                                        .frame(width: 0.5)
+                                                }
+                                        } else {
+                                            Color.clear
+                                        }
+                                    }
+                                )
                                 .contextMenu {
                                     // Missing-state actions at top
                                     if !state.resolutionStatus.isAccessible {

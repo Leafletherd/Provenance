@@ -142,14 +142,11 @@ struct HomeView: View {
 
                 Spacer()
 
-                // PR-18 §2c — primary action button mirrors Seed's Plant
-                // button: filled Brand.accent (prov/accent #1D9E75) capsule
-                // with cream (surfaceBase #FAF6EF) label. Manual styling so
-                // both colors stay pinned regardless of system bordered-
-                // prominent rendering.
-                let saveDisabled = checkInText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                    || targetProjectID == nil
-                    || isSaving
+                // PR-19 §3a — Two-state Save button (mirrors Seed's Plant button):
+                //   Empty:  tintSurface bg + accent text (visible but subdued)
+                //   Active: solid accent bg + cream (surfaceBase) text
+                let checkInEmpty = checkInText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                let saveDisabled = checkInEmpty || targetProjectID == nil || isSaving
                 Button {
                     saveCheckIn()
                 } label: {
@@ -162,17 +159,16 @@ struct HomeView: View {
                                 .font(.system(size: 13, weight: .medium))
                         }
                     }
-                    .foregroundColor(Brand.surfaceBase)
+                    .foregroundColor(checkInEmpty ? Brand.accent : Brand.surfaceBase)
                     .padding(.horizontal, 18)
                     .padding(.vertical, 6)
                     .background(
-                        Capsule().fill(Brand.accent)
+                        Capsule().fill(checkInEmpty ? Brand.tintSurface : Brand.accent)
                     )
                 }
                 .buttonStyle(.plain)
                 .keyboardShortcut(.return, modifiers: .command)
                 .disabled(saveDisabled)
-                .opacity(saveDisabled ? 0.4 : 1.0)
             }
 
             // Text input
@@ -452,9 +448,11 @@ private struct HomeStatView: View {
                 .font(.custom("Palatino", size: 28))
                 .fontWeight(.regular)
                 .foregroundColor(Brand.textPrimary)
+            // PR-19 §2b — label sits at text/secondary (#5A5854), not textMuted.
+            // Matches the spec's "system UI at text/secondary" directive.
             Text(label)
                 .font(.system(size: 12))
-                .foregroundColor(Brand.textMuted)
+                .foregroundColor(Brand.textSecondary)
         }
     }
 }
