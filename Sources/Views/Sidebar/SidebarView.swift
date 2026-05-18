@@ -82,32 +82,44 @@ struct SidebarView: View {
             Color.clear.frame(height: 28)
 
             List(selection: selectionBinding) {
-                // Home row
+                // Home row — REV-10: Mail-style accent selection
                 Label {
                     Text("Home")
                         .font(.system(size: 15, weight: .medium))
+                        .foregroundColor(appState.isHomeSelected ? Brand.surfaceBase : Brand.textPrimary)
                 } icon: {
                     Image(systemName: "house")
                         .font(.system(size: 12))
+                        .foregroundColor(appState.isHomeSelected ? Brand.surfaceBase : Brand.textSecondary)
                 }
                 .tag(SidebarItem.home)
+                .listRowBackground(
+                    Group {
+                        if appState.isHomeSelected {
+                            RoundedRectangle(cornerRadius: 8)
+                                .fill(Brand.accent)
+                                .padding(.horizontal, 4)
+                        } else {
+                            Color.clear
+                        }
+                    }
+                )
 
                 if !appState.projectStates.isEmpty {
                     Section("Projects") {
                         ForEach(appState.projectStates) { state in
                             ProjectRowView(state: state)
                                 .tag(SidebarItem.project(state.project.id))
-                                // PR-19 §3d — prov/tintSurface bg + 0.5pt tintBorder left stroke
-                                // when selected; transparent otherwise. Replaces system grey highlight.
+                                // REV-10: Mail-style solid accent rounded rect replaces
+                                // tint-surface + 0.5pt tintBorder left stroke.
                                 .listRowBackground(
                                     Group {
-                                        if appState.selectedProjectID == state.project.id {
-                                            Brand.tintSurface
-                                                .overlay(alignment: .leading) {
-                                                    Rectangle()
-                                                        .fill(Brand.tintBorder)
-                                                        .frame(width: 0.5)
-                                                }
+                                        let sel = !appState.isHomeSelected &&
+                                                  appState.selectedProjectID == state.project.id
+                                        if sel {
+                                            RoundedRectangle(cornerRadius: 8)
+                                                .fill(Brand.accent)
+                                                .padding(.horizontal, 4)
                                         } else {
                                             Color.clear
                                         }
@@ -296,14 +308,18 @@ struct ProjectRowView: View {
     }
 
     var body: some View {
+        // REV-10: text colours flip to surfaceBase (cream) on the accent-filled
+        // selected row. Status dot becomes surfaceBase on selected to stay readable.
         HStack(alignment: .center, spacing: 10) {
             if isMissing {
                 Image(systemName: "exclamationmark.triangle")
                     .font(.system(size: 10))
-                    .foregroundColor(Brand.statusStuck)
+                    .foregroundColor(isSelected ? Brand.surfaceBase.opacity(0.8) : Brand.statusStuck)
             } else {
                 Circle()
-                    .fill(state.isWatching ? Brand.accent : Brand.textMuted)
+                    .fill(isSelected
+                          ? Brand.surfaceBase.opacity(0.75)
+                          : (state.isWatching ? Brand.accent : Brand.textMuted))
                     .frame(width: 8, height: 8)
             }
 
@@ -311,17 +327,19 @@ struct ProjectRowView: View {
                 Text(state.project.name)
                     .font(.system(size: 15, weight: .medium))
                     .lineLimit(1)
-                    .foregroundColor(isMissing ? Brand.textMuted : Brand.textPrimary)
+                    .foregroundColor(isSelected
+                                     ? Brand.surfaceBase
+                                     : (isMissing ? Brand.textMuted : Brand.textPrimary))
 
                 Text(state.project.folderURL.lastPathComponent)
                     .font(.system(size: 12))
-                    .foregroundColor(Brand.textMuted)
+                    .foregroundColor(isSelected ? Brand.surfaceBase.opacity(0.8) : Brand.textMuted)
                     .lineLimit(1)
 
                 if let sub = missingSubtext {
                     Text(sub)
                         .font(.system(size: 10).italic())
-                        .foregroundColor(Brand.textMuted)
+                        .foregroundColor(isSelected ? Brand.surfaceBase.opacity(0.7) : Brand.textMuted)
                         .lineLimit(1)
                 }
             }
@@ -329,9 +347,8 @@ struct ProjectRowView: View {
         }
         .padding(.vertical, 6)
         .padding(.horizontal, 8)
-        // PR-20: selection background is handled entirely by .listRowBackground in
-        // SidebarView (prov/tintSurface + 0.5pt tintBorder left stroke). No row-level
-        // background/overlay here — that was doubling the highlight as a rounded pill.
+        // REV-10: selection background handled entirely by .listRowBackground in
+        // SidebarView — accent-filled RoundedRectangle. No row-level background here.
     }
 }
 
