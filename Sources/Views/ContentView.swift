@@ -48,11 +48,12 @@ struct ContentView: View {
                 }
             }
         }
+        // PR-20 §B — prov/accent tint propagates to all .borderedProminent buttons and
+        // system UI tint throughout the app, replacing system blue.
+        .tint(Brand.accent)
         // Title bar is transparent (set in ProvenanceWindowConfigurator below) so each
         // column's own background paints through it — body shows surfaceBase tan,
-        // sidebar shows surfaceSidebar white. The previous `.toolbarBackground(surfaceBase)`
-        // painted TAN over the entire title bar including the sidebar column, which is
-        // why the sidebar's white kept appearing to start below the title bar.
+        // sidebar shows surfaceSidebar white.
         // App-level toolbar — always visible regardless of which pane is active.
         .toolbar {
             ToolbarItem(placement: .primaryAction) {

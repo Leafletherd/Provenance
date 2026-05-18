@@ -171,9 +171,10 @@ struct HomeView: View {
                 .disabled(saveDisabled)
             }
 
-            // Text input
-            // Placeholder and TextEditor use identical padding so the first typed
-            // character lands at the exact same x,y as the placeholder's first letter.
+            // Text input — PR-20 §C cursor alignment fix.
+            // NSTextView has lineFragmentPadding ~5pt by default, shifting the text cursor
+            // right of the placeholder. TextEditorLineFragmentFixer zeroes it so cursor
+            // and placeholder both start at the same x position (.padding(.horizontal, 4)).
             ZStack(alignment: .topLeading) {
                 if checkInText.isEmpty {
                     Text("Ready to check in? Type a sentence or two.")
@@ -188,6 +189,7 @@ struct HomeView: View {
                     .scrollContentBackground(.hidden)
                     .padding(.horizontal, 4)
                     .padding(.vertical, 4)
+                    .background(TextEditorLineFragmentFixer())
             }
             .frame(minHeight: 80, maxHeight: 200)
             .background(Brand.surfaceSunken)
@@ -453,6 +455,31 @@ private struct HomeStatView: View {
             Text(label)
                 .font(.system(size: 12))
                 .foregroundColor(Brand.textSecondary)
+        }
+    }
+}
+
+// MARK: - TextEditor cursor alignment fixer (PR-20 §C)
+//
+// NSTextView has a default lineFragmentPadding of ~5pt that shifts the text cursor
+// to the right of where the placeholder text appears. This NSViewRepresentable zeroes
+// that padding so the cursor and placeholder align at the same horizontal position.
+
+private struct TextEditorLineFragmentFixer: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSView { NSView() }
+    func updateNSView(_ nsView: NSView, context: Context) {
+        DispatchQueue.main.async {
+            // Walk up from our background layer through the NSScrollView that backs
+            // SwiftUI's TextEditor, then zero the NSTextContainer's lineFragmentPadding.
+            var view: NSView? = nsView.superview
+            while let v = view {
+                if let scrollView = v as? NSScrollView,
+                   let textView = scrollView.documentView as? NSTextView {
+                    textView.textContainer?.lineFragmentPadding = 0
+                    return
+                }
+                view = v.superview
+            }
         }
     }
 }

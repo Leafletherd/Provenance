@@ -329,16 +329,9 @@ struct ProjectRowView: View {
         }
         .padding(.vertical, 6)
         .padding(.horizontal, 8)
-        // Per user directive: selected sidebar row gets prov/tint-surface bg
-        // (#E4F2EE light / #181F1C dark) instead of the flat system highlight.
-        .background(
-            RoundedRectangle(cornerRadius: Brand.radiusMd)
-                .fill(isSelected ? Brand.tintSurface : Color.clear)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: Brand.radiusMd)
-                .stroke(isSelected ? Brand.tintBorder : Color.clear, lineWidth: 0.5)
-        )
+        // PR-20: selection background is handled entirely by .listRowBackground in
+        // SidebarView (prov/tintSurface + 0.5pt tintBorder left stroke). No row-level
+        // background/overlay here — that was doubling the highlight as a rounded pill.
     }
 }
 
