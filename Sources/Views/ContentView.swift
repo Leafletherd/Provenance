@@ -12,12 +12,14 @@ struct ContentView: View {
                 .navigationSplitViewColumnWidth(min: 180, ideal: 220, max: 320)
         } detail: {
             ZStack {
-                // PR-23 §A: paint surfaceBase up through the title bar in the
-                // body column — mirrors the sidebar column's surfaceSidebar
-                // ignoresSafeArea, so the two columns meet at the column boundary
-                // with no white toolbar band on top.
+                // PR-28 §A — detail-column body is cream (surfaceBase) within
+                // the safe area only. The title-bar region (above the safe
+                // area) is intentionally NOT painted by this view — the
+                // window's tan backgroundColor + .toolbarBackground(tan) show
+                // through there, producing the full-width tan header band
+                // that matches Seed's bench. The horizontal tan→cream change
+                // at the safe-area boundary IS the visible "divider."
                 Brand.surfaceBase
-                    .ignoresSafeArea()
 
                 if appState.isHomeSelected || appState.selectedProjectID == nil {
                     HomeView()
@@ -58,14 +60,10 @@ struct ContentView: View {
         // PR-20 §B — prov/accent tint propagates to all .borderedProminent buttons and
         // system UI tint throughout the app, replacing system blue.
         .tint(Brand.accent)
-        // PR-23 §A: no global .toolbarBackground — that would override the
-        // per-column surfaceSidebar / surfaceBase backgrounds painted up through
-        // the title bar by .ignoresSafeArea() on each column, producing a seam
-        // between the title bar and the sidebar tan. NSWindow.titlebarAppearsTransparent
-        // = true (set in ProvenanceWindowConfigurator) lets each column show through.
-        // Title bar is transparent (set in ProvenanceWindowConfigurator below) so each
-        // column's own background paints through it — body shows surfaceBase tan,
-        // sidebar shows surfaceSidebar white.
+        // PR-28 §A — global toolbar background is set at the App/Scene root
+        // (in ProvenanceApp.swift) as Brand.surfaceSidebar (tan), so the
+        // header band remains tan regardless of which pane is mounted or
+        // when the sidebar is toggled (§B fix).
         // App-level toolbar — always visible regardless of which pane is active.
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
@@ -121,19 +119,19 @@ struct ContentView: View {
     }
 }
 
-// Makes the title bar transparent and sets the window background to surfaceBase
-// so the body's color shows through the title bar over the body region. The
-// sidebar column has its own .background(Brand.surfaceSidebar.ignoresSafeArea())
-// which paints white through the title bar over the sidebar region.
+// PR-28 §A — the NSWindow background is TAN (surfaceSidebar) so the full
+// width of the title-bar region reads as tan: it shows under the toolbar,
+// over the sidebar column, and over the body column's title-bar strip. The
+// detail column then paints surfaceBase (cream) only inside the safe area
+// (i.e. below the toolbar) — that's what produces Seed's bench-style
+// horizontal tan→cream "divider."
 private struct ProvenanceWindowConfigurator: NSViewRepresentable {
     func makeNSView(context: Context) -> NSView { NSView() }
     func updateNSView(_ nsView: NSView, context: Context) {
         guard let window = nsView.window else { return }
         if #available(macOS 12.0, *) { window.titlebarSeparatorStyle = .none }
         window.titlebarAppearsTransparent = true
-        // PR-22 follow-up: window background = surfaceBase (cream) so toolbar,
-        // tab bar, and body all share one continuous surface — no green-tinted band.
-        window.backgroundColor = NSColor(Brand.surfaceBase)
+        window.backgroundColor = NSColor(Brand.surfaceSidebar)
 
         // PR-22 §B2: remove the baseline separator the NSToolbar draws under
         // itself. showsBaselineSeparator is deprecated on macOS 15 but still
