@@ -15,13 +15,14 @@ struct ProvenanceApp: App {
                 .onOpenURL { url in
                     appState.handleURL(url)
                 }
-                // PR-28 §B — toolbar background applied at App/Scene root so
-                // sidebar-toggle re-layouts don't flip the header chrome. The
-                // band is TAN (surfaceSidebar) across the FULL window width;
-                // the cream (surfaceBase) lives only in the body region below
-                // the toolbar in the detail column.
-                .toolbarBackground(Brand.surfaceSidebar, for: .windowToolbar)
-                .toolbarBackground(.visible, for: .windowToolbar)
+                // PR-29 — sidebar tan extends up over its OWN column only;
+                // the right column is cream from top to bottom. To achieve
+                // per-column color in the title bar, the toolbar must NOT
+                // paint a global background; transparent titlebar +
+                // .ignoresSafeArea() on each column's background does the
+                // work. Applied at Scene root so sidebar-toggle re-layouts
+                // don't reintroduce a flip (cf. PR-28 §B diagnostic).
+                .toolbarBackground(.hidden, for: .windowToolbar)
         }
         // §5a: default 1100×720 on first launch; SwiftUI persists user-resize automatically
         .defaultSize(width: 1100, height: 720)

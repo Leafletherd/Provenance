@@ -12,14 +12,16 @@ struct ContentView: View {
                 .navigationSplitViewColumnWidth(min: 180, ideal: 220, max: 320)
         } detail: {
             ZStack {
-                // PR-28 §A — detail-column body is cream (surfaceBase) within
-                // the safe area only. The title-bar region (above the safe
-                // area) is intentionally NOT painted by this view — the
-                // window's tan backgroundColor + .toolbarBackground(tan) show
-                // through there, producing the full-width tan header band
-                // that matches Seed's bench. The horizontal tan→cream change
-                // at the safe-area boundary IS the visible "divider."
+                // PR-29 §A — detail column paints cream up THROUGH the title
+                // bar via .ignoresSafeArea(), so the right side of the title
+                // bar reads as cream while the sidebar's own surfaceSidebar
+                // .ignoresSafeArea() paints tan on its column only. The hard
+                // vertical edge at the column boundary in the title-bar zone
+                // is the visible "divider" matching Seed's bench. The soft
+                // 24pt gradient (in ProjectView, below the safe area) blends
+                // the same boundary in the body zone.
                 Brand.surfaceBase
+                    .ignoresSafeArea()
 
                 if appState.isHomeSelected || appState.selectedProjectID == nil {
                     HomeView()
@@ -119,19 +121,20 @@ struct ContentView: View {
     }
 }
 
-// PR-28 §A — the NSWindow background is TAN (surfaceSidebar) so the full
-// width of the title-bar region reads as tan: it shows under the toolbar,
-// over the sidebar column, and over the body column's title-bar strip. The
-// detail column then paints surfaceBase (cream) only inside the safe area
-// (i.e. below the toolbar) — that's what produces Seed's bench-style
-// horizontal tan→cream "divider."
+// PR-29 — NSWindow background reverts to CREAM (surfaceBase). With
+// titlebarAppearsTransparent = true and .toolbarBackground(.hidden), each
+// column's own .ignoresSafeArea() paints up through the title bar: the
+// sidebar shows tan over its column, the detail shows cream over its
+// column. The cream window backgroundColor is the fallback for any
+// unpainted region (e.g. during sidebar-toggle relayouts, preventing the
+// white-flash regression).
 private struct ProvenanceWindowConfigurator: NSViewRepresentable {
     func makeNSView(context: Context) -> NSView { NSView() }
     func updateNSView(_ nsView: NSView, context: Context) {
         guard let window = nsView.window else { return }
         if #available(macOS 12.0, *) { window.titlebarSeparatorStyle = .none }
         window.titlebarAppearsTransparent = true
-        window.backgroundColor = NSColor(Brand.surfaceSidebar)
+        window.backgroundColor = NSColor(Brand.surfaceBase)
 
         // PR-22 §B2: remove the baseline separator the NSToolbar draws under
         // itself. showsBaselineSeparator is deprecated on macOS 15 but still

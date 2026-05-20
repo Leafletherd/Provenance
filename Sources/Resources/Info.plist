@@ -9,9 +9,9 @@
     <key>CFBundleDisplayName</key>
     <string>Provenance</string>
     <key>CFBundleVersion</key>
-    <string>32</string>
+    <string>33</string>
     <key>CFBundleShortVersionString</key>
-    <string>1.33.0-Alpha</string>
+    <string>1.34.0-Alpha</string>
     <key>NSHumanReadableCopyright</key>
     <string>© 2026 Procestra. All rights reserved.</string>
     <key>CFBundlePackageType</key>
