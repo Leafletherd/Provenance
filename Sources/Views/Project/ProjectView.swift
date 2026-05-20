@@ -18,14 +18,15 @@ struct ProjectView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // ── Tab bar (§6a) ─────────────────────────────────────────────
-            // Sits on Brand.surfaceBase (via outer VStack background) so there
-            // is no separate white-strip chrome above the body — the tab row
-            // blends into the same tan surface as the content panels (§3a.ii).
-            // Tab bar — per user directive: titlebar accent wash treatment.
-            // Background = titlebarBg (surfaceSidebar + 5% prov-tint per spec § 00).
-            // Bottom = 0.5px borderUI hairline to separate from content body.
-            HStack(spacing: 0) {
+            // ── Tab bar (PR-24) ───────────────────────────────────────────
+            // PR-24 §A: NO explicit .background on this row — the continuous
+            // surfaceBase from ContentView's detail ZStack flows up under and
+            // through the tab row, eliminating the visible "header band" the
+            // old design produced.
+            // PR-24 §B: each tab styled as a pill matching the ArtifactsView
+            // filter chip ("All / Seeds / Notes / ..."). The 2pt accent
+            // underline is gone — the filled chip is the selection indicator.
+            HStack(spacing: Brand.spaceSM) {
                 ForEach(ProjectTab.allCases, id: \.self) { tab in
                     TabButton(
                         tab: tab,
@@ -36,13 +37,13 @@ struct ProjectView: View {
                 }
                 Spacer()
             }
-            .padding(.horizontal, 12)
-            .padding(.top, 8)
-            .padding(.bottom, 4)
-            .background(Brand.surfaceBase)
+            .padding(.horizontal, Brand.spaceLG)
+            .padding(.top, Brand.spaceMD)
+            .padding(.bottom, Brand.spaceSM)
+            // Bottom divider remains — separates the tab row from the body.
             .overlay(
                 Rectangle()
-                    .fill(Brand.border)
+                    .fill(Brand.borderSubtle)
                     .frame(height: 0.5),
                 alignment: .bottom
             )
@@ -69,9 +70,10 @@ struct ProjectView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        // §3a.ii — entire VStack (including the tab bar row) sits on surfaceBase
-        // so no white strip appears between the toolbar and the tan content body.
-        .background(Brand.surfaceBase)
+        // PR-24 §A: no explicit .background on the root VStack either — the
+        // ContentView detail ZStack paints surfaceBase up through the title bar
+        // continuously, and this view sits transparently on top so there is no
+        // band/seam at any column boundary.
         // provenance://reveal?path=…&tab=<tab> — switch to the requested tab.
         .onChange(of: appState.pendingDeepLink) { link in
             guard case let .selectTab(projectID, tab) = link,
@@ -82,10 +84,20 @@ struct ProjectView: View {
     }
 }
 
-// MARK: - Tab button with hover (§5c)
+// MARK: - Tab button — PR-24 chip-pill design
 
-/// Individual tab button for ProjectView's §6a view-tab bar.
-/// Gets a RoundedRectangle surfaceHover background on cursor hover (§5c).
+/// Individual tab pill for ProjectView's view-tab bar, matching the
+/// `ArtifactFilterChip` ("All / Seeds / Notes / …") design exactly so the
+/// two row treatments read as one unified system.
+///
+/// Styling values mirror ArtifactFilterChip in ArtifactsView.swift:
+///   - font: 12pt system, semibold when active
+///   - padding: Brand.spaceSM horizontal, 4 vertical
+///   - active text: Brand.accent
+///   - inactive text: Brand.textSecondary
+///   - active bg: Brand.accent.opacity(0.1)
+///   - border: 0.5pt — accent@0.4 when active, Brand.border when not
+///   - corner radius: Brand.radiusMd (6pt)
 private struct TabButton: View {
     let tab: ProjectTab
     let isSelected: Bool
@@ -96,21 +108,23 @@ private struct TabButton: View {
     var body: some View {
         Button(action: action) {
             Text(tab.rawValue)
-                .font(.system(size: 13, weight: isSelected ? .semibold : .regular))
-                // B1 — PR-21: selected tab text uses textPrimary (near-black), not accent green.
-                .foregroundColor(isSelected ? Brand.textPrimary : Brand.textSecondary)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 8)
+                .font(.system(size: 12, weight: isSelected ? .semibold : .regular))
+                .foregroundColor(isSelected ? Brand.accent : Brand.textSecondary)
+                .padding(.horizontal, Brand.spaceSM)
+                .padding(.vertical, 4)
                 .background(
+                    isSelected
+                        ? Brand.accent.opacity(0.1)
+                        : (hovering ? Brand.surfaceHover : Color.clear)
+                )
+                .overlay(
                     RoundedRectangle(cornerRadius: Brand.radiusMd)
-                        .fill(
-                            isSelected
-                                // PR-22 §C3: neutral surfaceSelected replaces accentDim
-                                // (light green tint) for the selected tab background.
-                                ? Brand.surfaceSelected
-                                : (hovering ? Brand.surfaceHover : Color.clear)
+                        .stroke(
+                            isSelected ? Brand.accent.opacity(0.4) : Brand.border,
+                            lineWidth: 0.5
                         )
                 )
+                .clipShape(RoundedRectangle(cornerRadius: Brand.radiusMd))
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
