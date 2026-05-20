@@ -17,28 +17,29 @@ struct ProjectView: View {
     @State private var selectedTab: ProjectTab = .overview
 
     var body: some View {
-        ZStack(alignment: .leading) {
-            // PR-27 §A — Seed bench chrome pattern. The title-bar area above
-            // ProjectView already shows a HARD vertical seam (sidebar tan vs
-            // detail-column cream painted via ignoresSafeArea in ContentView),
-            // which is exactly what Seed's bench shows. Below the title bar
-            // — where ProjectView lives — a narrow gradient strip at the
-            // leading edge softens the seam between the sidebar tan and the
-            // body cream. 24pt was tuned to match Seed's bench by eye.
-            LinearGradient(
-                colors: [Brand.surfaceSidebar, Brand.surfaceBase],
-                startPoint: .leading,
-                endPoint: .trailing
-            )
-            .frame(width: 24)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .allowsHitTesting(false)
+        // PR-30 — Three-tone chrome.
+        // Header zone (tab bar + the title-bar strip above it via
+        // ignoresSafeArea on its background) uses Brand.surfaceSunken — a
+        // slightly darker cream than the body. The leading-edge gradient
+        // here blends sidebar tan → surfaceSunken.
+        // Body zone uses Brand.surfaceBase (lighter cream). Its leading-edge
+        // gradient blends sidebar tan → surfaceBase.
+        // Each zone is .clipped() so the gradient never bleeds out — that's
+        // the Item B fix for the diagonal artifact previously visible
+        // behind the Overview tab pill.
+        VStack(spacing: 0) {
+            // ── Header zone ───────────────────────────────────────────────
+            ZStack(alignment: .leading) {
+                LinearGradient(
+                    colors: [Brand.surfaceSidebar, Brand.surfaceSunken],
+                    startPoint: .leading,
+                    endPoint: .trailing
+                )
+                .frame(width: 24)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .allowsHitTesting(false)
 
-            VStack(spacing: 0) {
-                // ── Tab bar (PR-26 §B carried forward) ───────────────────
-                // Vertical padding symmetric so the chip labels sit
-                // equidistant from top/bottom; no background — the leading
-                // gradient strip shows through behind the leftmost tabs.
+                // Tab bar (PR-26 §B: symmetric vertical padding).
                 HStack(spacing: Brand.spaceSM) {
                     ForEach(ProjectTab.allCases, id: \.self) { tab in
                         TabButton(
@@ -52,49 +53,57 @@ struct ProjectView: View {
                 }
                 .padding(.horizontal, Brand.spaceLG)
                 .padding(.vertical, Brand.spaceSM)
-                .overlay(
-                    Rectangle()
-                        .fill(Brand.borderSubtle)
-                        .frame(height: 0.5),
-                    alignment: .bottom
-                )
-
-            // ── Content ───────────────────────────────────────────────────
-            Group {
-                switch selectedTab {
-                case .overview:
-                    OverviewView(state: state)
-                        .environmentObject(appState)
-                case .sources:
-                    SourcesView(state: state)
-                case .artifacts:
-                    ArtifactsView(state: state)
-                case .versions:
-                    VersionsView(state: state)
-                case .checkins:
-                    CheckInsView(state: state)
-                case .ledger:
-                    LedgerView(state: state)
-                case .export:
-                    ExportView(state: state)
-                }
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            // Header bg extends UP through the title bar so the toolbar/pill
+            // area also reads as surfaceSunken — the subtle horizontal shift
+            // at the tab-bar's bottom edge IS the visible header→body divider
+            // (no drawn line).
+            .background(Brand.surfaceSunken.ignoresSafeArea(edges: .top))
+            .clipped()
+
+            // ── Body zone ─────────────────────────────────────────────────
+            ZStack(alignment: .leading) {
+                LinearGradient(
+                    colors: [Brand.surfaceSidebar, Brand.surfaceBase],
+                    startPoint: .leading,
+                    endPoint: .trailing
+                )
+                .frame(width: 24)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .allowsHitTesting(false)
+
+                Group {
+                    switch selectedTab {
+                    case .overview:
+                        OverviewView(state: state)
+                            .environmentObject(appState)
+                    case .sources:
+                        SourcesView(state: state)
+                    case .artifacts:
+                        ArtifactsView(state: state)
+                    case .versions:
+                        VersionsView(state: state)
+                    case .checkins:
+                        CheckInsView(state: state)
+                    case .ledger:
+                        LedgerView(state: state)
+                    case .export:
+                        ExportView(state: state)
+                    }
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+            .background(Brand.surfaceBase)
+            .clipped()
         }
-        // PR-24 §A: no explicit .background on the root VStack either — the
-        // ContentView detail ZStack paints surfaceBase up through the title bar
-        // continuously, and this view sits transparently on top so there is no
-        // band/seam at any column boundary.
-        // provenance://reveal?path=…&tab=<tab> — switch to the requested tab.
         .onChange(of: appState.pendingDeepLink) { link in
             guard case let .selectTab(projectID, tab) = link,
                   projectID == state.project.id else { return }
             selectedTab = tab
             appState.pendingDeepLink = nil
         }
-        }   // close ZStack
-    }       // close body
-}           // close struct ProjectView
+    }
+}
 
 // MARK: - Tab button — PR-24 chip-pill design
 
