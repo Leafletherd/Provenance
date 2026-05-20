@@ -116,9 +116,10 @@ struct CheckInCardView: View {
             .font(.system(size: 12))
         }
         .padding(Brand.spaceMD)
-        // PR-22 §C4: cream surfaceBase card + subtle border, matching
-        // Seed's bench-card pattern. Replaces accentDim (light green tint).
-        .background(Brand.surfaceBase)
+        // PR-22 §C4 (follow-up): surfaceSelected (warm beige) card background —
+        // matches the sidebar selection treatment so cards sit visually distinct
+        // against the surfaceBase body rather than appearing to float.
+        .background(Brand.surfaceSelected)
         .overlay(
             RoundedRectangle(cornerRadius: Brand.radiusMd)
                 .stroke(Brand.borderSubtle, lineWidth: 0.5)

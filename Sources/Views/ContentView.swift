@@ -55,7 +55,7 @@ struct ContentView: View {
         // NSWindow-level titlebarAppearsTransparent + backgroundColor set in
         // ProvenanceWindowConfigurator. Without both, macOS can briefly flash a white
         // toolbar on initial display or when navigating between views.
-        .toolbarBackground(Brand.titlebarBg, for: .windowToolbar)
+        .toolbarBackground(Brand.surfaceBase, for: .windowToolbar)
         .toolbarBackground(.visible, for: .windowToolbar)
         // Title bar is transparent (set in ProvenanceWindowConfigurator below) so each
         // column's own background paints through it — body shows surfaceBase tan,
@@ -125,8 +125,9 @@ private struct ProvenanceWindowConfigurator: NSViewRepresentable {
         guard let window = nsView.window else { return }
         if #available(macOS 12.0, *) { window.titlebarSeparatorStyle = .none }
         window.titlebarAppearsTransparent = true
-        // Per spec § 00: titlebar = surfaceSidebar + 5% app-tint wash.
-        window.backgroundColor = NSColor(Brand.titlebarBg)
+        // PR-22 follow-up: window background = surfaceBase (cream) so toolbar,
+        // tab bar, and body all share one continuous surface — no green-tinted band.
+        window.backgroundColor = NSColor(Brand.surfaceBase)
 
         // PR-22 §B2: remove the baseline separator the NSToolbar draws under
         // itself. showsBaselineSeparator is deprecated on macOS 15 but still

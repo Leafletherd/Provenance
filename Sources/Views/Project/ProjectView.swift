@@ -39,7 +39,7 @@ struct ProjectView: View {
             .padding(.horizontal, 12)
             .padding(.top, 8)
             .padding(.bottom, 4)
-            .background(Brand.titlebarBg)
+            .background(Brand.surfaceBase)
             .overlay(
                 Rectangle()
                     .fill(Brand.border)

@@ -259,11 +259,11 @@ struct ArtifactCardView: View {
             .font(.system(size: 12))
         }
         .padding(Brand.spaceMD)
-        // PR-22 §C4: cream surfaceBase card + subtle border stroke.
-        // Replaces accentDim (light green tint) which the user identified
-        // as the "light green outer background" in the Artifacts tab screenshot.
-        // Inner thumbnail area (surfaceSunken) stays warm beige — correct.
-        .background(Brand.surfaceBase)
+        // PR-22 §C4 (follow-up): surfaceSelected (warm beige) card background —
+        // matches the sidebar selection treatment so cards read as distinct
+        // surfaces against the surfaceBase body, not floating white patches.
+        // Inner thumbnail area (surfaceSunken) stays as-is.
+        .background(Brand.surfaceSelected)
         .overlay(
             RoundedRectangle(cornerRadius: Brand.radiusLg)
                 .stroke(Brand.borderSubtle, lineWidth: 0.5)
