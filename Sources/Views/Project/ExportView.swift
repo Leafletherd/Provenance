@@ -54,9 +54,7 @@ struct ExportView: View {
     @State private var exportError: String? = nil
     @State private var authorName: String = ""
 
-    // Promotion
-    @State private var showPromoteSheet = false
-    @State private var isPromoting = false
+    // Open-in-Works feedback (PR-26 §F)
     @State private var promoteConfirmation: String? = nil
     @State private var promoteError: String? = nil
 
@@ -85,39 +83,29 @@ struct ExportView: View {
                     .pickerStyle(.radioGroup)
                     .labelsHidden()
 
-                    // Nested format toggle under the selected intent.
+                    // PR-26 §D — same segmented control in both intents; in
+                    // Authorship, Markdown is disabled rather than absent so
+                    // the picker shape never changes between intents.
                     HStack(spacing: Brand.spaceSM) {
                         Text("Output:")
                             .font(.system(size: 12))
                             .foregroundColor(Brand.textSecondary)
-                        switch selectedIntent {
-                        case .review:
-                            Picker("", selection: $reviewFormat) {
-                                ForEach(ReviewFormat.allCases, id: \.self) { f in
-                                    Text(f.label).tag(f)
-                                }
-                            }
-                            .pickerStyle(.segmented)
-                            .labelsHidden()
-                            .frame(width: 200)
-                        case .authorship:
-                            // PDF-only pill (non-interactive, with tooltip).
-                            Text("PDF")
-                                .font(.system(size: 11, weight: .semibold))
-                                .foregroundColor(Brand.accent)
-                                .padding(.horizontal, Brand.spaceSM)
-                                .padding(.vertical, 3)
-                                .background(Brand.accent.opacity(0.1))
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: Brand.radiusMd)
-                                        .stroke(Brand.accent.opacity(0.4), lineWidth: 0.5)
-                                )
-                                .cornerRadius(Brand.radiusMd)
-                                .help("Authorship reports are PDF only.")
-                        }
+                        UnifiedFormatPicker(
+                            format: $reviewFormat,
+                            markdownEnabled: selectedIntent == .review
+                        )
+                        .frame(width: 220)
                         Spacer()
                     }
                     .padding(.leading, 4)
+                    .onChange(of: selectedIntent) { newIntent in
+                        // Authorship forces PDF — Markdown is not a valid
+                        // output for it, so reset the selection if the user
+                        // had Markdown chosen on the Review intent.
+                        if newIntent == .authorship && reviewFormat == .markdown {
+                            reviewFormat = .pdf
+                        }
+                    }
 
                     // Intent-specific description (System UI 11pt, text/secondary).
                     Text(selectedIntent.description)
@@ -152,10 +140,11 @@ struct ExportView: View {
                         .foregroundColor(Brand.textMuted)
                         .padding(.top, Brand.spaceXS)
 
-                    // PR-25 §A3 — integrity line only relevant for Authorship Report.
-                    if selectedIntent == .authorship {
-                        integrityLine
-                    }
+                    // PR-26 §C — integrity status line shown for BOTH intents.
+                    // The full Integrity SECTION (with hashes) remains
+                    // Authorship-only in the PDF; this UI line is a trust
+                    // signal that applies to either output type.
+                    integrityLine
                 }
 
                 // ── Export action ─────────────────────────────────────────────
@@ -198,19 +187,22 @@ struct ExportView: View {
                     .overlay(Brand.border)
                     .padding(.vertical, Brand.spaceSM)
 
-                // ── Promote to Works ──────────────────────────────────────────
-                sectionHeader("Promote to Works")
+                // ── Open in Works (PR-26 §F) ──────────────────────────────────
+                // Replaces "Promote to Works" — no bundle is written. Works
+                // receives the folder path via the works:// URL scheme and
+                // auto-detects .ledger/ (WK-N follow-up).
+                sectionHeader("Open in Works")
 
                 VStack(alignment: .leading, spacing: Brand.spaceMD) {
-                    Text("When this project is ready to enter a Works library, promote it here. A bundle will be written and Works will be asked to open with the project pre-filled.")
+                    Text("Open this project folder in the Works app to add it to a portfolio. Works will read your provenance data automatically.")
                         .font(.system(size: 13))
                         .foregroundColor(Brand.textSecondary)
 
-                    Button("Promote to Works\u{2026}") {
-                        showPromoteSheet = true
+                    Button("Open in Works\u{2026}") {
+                        openInWorks()
                     }
                     .buttonStyle(.bordered)
-                    .disabled(isPromoting)
+                    .tint(Brand.textBrand)
 
                     if let confirmation = promoteConfirmation {
                         Text(confirmation)
@@ -232,19 +224,6 @@ struct ExportView: View {
             Task.detached(priority: .background) {
                 let name = await Self.gitAuthorName()
                 await MainActor.run { if authorName.isEmpty { authorName = name } }
-            }
-        }
-        .sheet(isPresented: $showPromoteSheet) {
-            PromoteConfirmSheet(
-                projectName: state.project.name,
-                checkInCount: includedCheckIns,
-                sourceCount: includedSources,
-                artifactCount: includedArtifacts
-            ) {
-                showPromoteSheet = false
-                runPromote()
-            } onCancel: {
-                showPromoteSheet = false
             }
         }
     }
@@ -408,26 +387,35 @@ struct ExportView: View {
         }
     }
 
-    // MARK: - Promote action
+    // MARK: - Open in Works (PR-26 §F)
 
-    private func runPromote() {
-        isPromoting = true
+    /// Launches Works (or prompts the user to install it) pointed at this
+    /// project's folder. NO bundle is written — Works auto-detects `.ledger/`
+    /// via the WK-N follow-up.
+    private func openInWorks() {
         promoteConfirmation = nil
         promoteError = nil
 
-        Task {
-            do {
-                _ = try await PromotionService.promote(state: state)
-                await MainActor.run {
-                    isPromoting = false
-                    promoteConfirmation = "Bundle ready. Works will open if installed; otherwise open it manually and add this folder."
-                }
-            } catch {
-                await MainActor.run {
-                    isPromoting = false
-                    promoteError = error.localizedDescription
-                }
-            }
+        let path = state.project.folderURL.path
+        let encoded = path.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? path
+        guard let worksURL = URL(string: "works://add?path=\(encoded)") else {
+            promoteError = "Could not construct works:// URL for \(path)."
+            return
+        }
+
+        // Append a ledger event so the handoff is traceable.
+        LedgerWriter.appendEvent(
+            type: .promotedToWorks,
+            detail: "Open in Works — \(state.project.name) (\(path))",
+            to: state.project
+        )
+        state.reloadEvents()
+
+        let launched = NSWorkspace.shared.open(worksURL)
+        if launched {
+            promoteConfirmation = "Works was asked to open this project."
+        } else {
+            promoteError = "Works isn't installed or didn't respond. Install Works and try again, or open the folder manually."
         }
     }
 
@@ -467,51 +455,43 @@ struct ExportStatPill: View {
     }
 }
 
-// MARK: - Promote confirmation sheet
+// MARK: - PR-26 §D — UnifiedFormatPicker
 
-struct PromoteConfirmSheet: View {
-    let projectName: String
-    let checkInCount: Int
-    let sourceCount: Int
-    let artifactCount: Int
-    let onPromote: () -> Void
-    let onCancel: () -> Void
+/// Segmented PDF/Markdown selector used by both export intents. Authorship
+/// passes `markdownEnabled: false` — same shape and position, reduced opacity
+/// + `.disabled(true)` on the Markdown segment so the picker never changes
+/// shape between intents.
+struct UnifiedFormatPicker: View {
+    @Binding var format: ReviewFormat
+    let markdownEnabled: Bool
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Brand.spaceLG) {
-            Text("Promote to Works")
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundColor(Brand.textPrimary)
-
-            Text("A Provenance bundle will be written to this project\u{2019}s folder. Works will open with this project ready to add to a library.")
-                .font(.system(size: 13))
-                .foregroundColor(Brand.textSecondary)
-                .fixedSize(horizontal: false, vertical: true)
-
-            Text("Will include \(checkInCount) check-in\(checkInCount == 1 ? "" : "s"), \(sourceCount) source\(sourceCount == 1 ? "" : "s"), \(artifactCount) artifact\(artifactCount == 1 ? "" : "s").")
-                .font(.system(size: 13))
-                .foregroundColor(Brand.textPrimary)
-                .padding(Brand.spaceSM)
-                .background(Brand.surfaceSunken)
-                .overlay(
-                    RoundedRectangle(cornerRadius: Brand.radiusMd)
-                        .stroke(Brand.border, lineWidth: 0.5)
-                )
-                .cornerRadius(Brand.radiusMd)
-
-            HStack {
-                Spacer()
-                Button("Cancel", action: onCancel)
-                    .buttonStyle(.bordered)
-                    .keyboardShortcut(.cancelAction)
-                Button("Promote") { onPromote() }
-                    .buttonStyle(.borderedProminent)
-                    .tint(Brand.accent)
-                    .keyboardShortcut(.defaultAction)
-            }
+        HStack(spacing: 0) {
+            segment(format: .pdf, enabled: true)
+            segment(format: .markdown, enabled: markdownEnabled)
         }
-        .padding(Brand.spaceXL)
-        .frame(width: 480)
-        .background(Brand.surfaceBase)
+        .overlay(
+            RoundedRectangle(cornerRadius: Brand.radiusMd)
+                .stroke(Brand.border, lineWidth: 0.5)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: Brand.radiusMd))
+    }
+
+    @ViewBuilder
+    private func segment(format target: ReviewFormat, enabled: Bool) -> some View {
+        let isSelected = (format == target)
+        Button(action: { if enabled { format = target } }) {
+            Text(target.label)
+                .font(.system(size: 11, weight: isSelected ? .semibold : .regular))
+                .foregroundColor(isSelected ? Brand.accent : Brand.textSecondary)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 5)
+                .background(isSelected ? Brand.accent.opacity(0.1) : Color.clear)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(!enabled)
+        .opacity(enabled ? 1 : 0.5)
+        .help(enabled ? "" : "Authorship reports are PDF only.")
     }
 }

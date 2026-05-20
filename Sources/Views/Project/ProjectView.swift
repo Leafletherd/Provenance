@@ -18,14 +18,18 @@ struct ProjectView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // ── Tab bar (PR-24) ───────────────────────────────────────────
-            // PR-24 §A: NO explicit .background on this row — the continuous
-            // surfaceBase from ContentView's detail ZStack flows up under and
-            // through the tab row, eliminating the visible "header band" the
-            // old design produced.
-            // PR-24 §B: each tab styled as a pill matching the ArtifactsView
-            // filter chip ("All / Seeds / Notes / ..."). The 2pt accent
-            // underline is gone — the filled chip is the selection indicator.
+            // ── Tab bar (PR-26 §A + §B) ───────────────────────────────────
+            // PR-26 §A — Option 2 (gradient): the header still reads as a
+            // distinct color regardless of upstream chrome decisions, so paint
+            // a left-to-right gradient (surfaceSidebar → surfaceBase) behind
+            // the tab row that resolves to surfaceBase within the first ~25%.
+            // The right portion is indistinguishable from the body bg; the
+            // left meets the sidebar's tan with no seam.
+            //
+            // PR-26 §B — vertical padding is symmetric (Brand.spaceSM top
+            // AND bottom) so the tab labels sit equidistant from the top and
+            // bottom of the bar. TabButton itself uses symmetric vertical
+            // padding (no asymmetry per chip).
             HStack(spacing: Brand.spaceSM) {
                 ForEach(ProjectTab.allCases, id: \.self) { tab in
                     TabButton(
@@ -38,9 +42,14 @@ struct ProjectView: View {
                 Spacer()
             }
             .padding(.horizontal, Brand.spaceLG)
-            .padding(.top, Brand.spaceMD)
-            .padding(.bottom, Brand.spaceSM)
-            // Bottom divider remains — separates the tab row from the body.
+            .padding(.vertical, Brand.spaceSM)
+            .background(
+                LinearGradient(
+                    colors: [Brand.surfaceSidebar, Brand.surfaceBase],
+                    startPoint: .leading,
+                    endPoint: UnitPoint(x: 0.25, y: 0.5)
+                )
+            )
             .overlay(
                 Rectangle()
                     .fill(Brand.borderSubtle)

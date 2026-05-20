@@ -38,9 +38,6 @@ struct SidebarView: View {
     @State private var projectToRemove: UUID? = nil
     @State private var renameProjectID: UUID? = nil
     @State private var renameText: String = ""
-    @State private var promoteState: ProjectState? = nil
-    @State private var isPromoting = false
-    @State private var showPromoteSheet = false
     @State private var showNewFolderSheet = false
 
     // Computed binding that maps isHomeSelected + selectedProjectID → SidebarItem
@@ -148,9 +145,8 @@ struct SidebarView: View {
                                             renameText = state.project.name
                                             renameProjectID = state.project.id
                                         }
-                                        Button("Promote to Works\u{2026}") {
-                                            promoteState = state
-                                            showPromoteSheet = true
+                                        Button("Open in Works\u{2026}") {
+                                            openInWorks(state: state)
                                         }
                                         Divider()
                                         Button("Disconnect Project", role: .destructive) {
@@ -236,25 +232,6 @@ struct SidebarView: View {
                 renameProjectID = nil
             }
         }
-        .sheet(isPresented: $showPromoteSheet) {
-            if let ps = promoteState {
-                PromoteConfirmSheet(
-                    projectName: ps.project.name,
-                    checkInCount: ps.checkIns.filter { $0.exportIncluded }.count,
-                    sourceCount:  ps.sources.filter  { $0.exportIncluded }.count,
-                    artifactCount: ps.artifacts.filter { $0.exportIncluded }.count
-                ) {
-                    showPromoteSheet = false
-                    isPromoting = true
-                    Task {
-                        _ = try? await PromotionService.promote(state: ps)
-                        await MainActor.run { isPromoting = false }
-                    }
-                } onCancel: {
-                    showPromoteSheet = false
-                }
-            }
-        }
         // New-folder sub-sheet — presented here so it persists even while the right pane
         // transitions from Home → ProjectView after connect.
         .sheet(isPresented: $showNewFolderSheet) {
@@ -277,6 +254,23 @@ struct SidebarView: View {
                 showNewFolderSheet = false
             }
         }
+    }
+
+    // MARK: - Open in Works (PR-26 §F)
+
+    /// Asks Works to open this project folder via the works:// URL scheme.
+    /// No bundle is written — Works auto-detects `.ledger/`.
+    private func openInWorks(state: ProjectState) {
+        let path = state.project.folderURL.path
+        let encoded = path.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? path
+        guard let url = URL(string: "works://add?path=\(encoded)") else { return }
+        LedgerWriter.appendEvent(
+            type: .promotedToWorks,
+            detail: "Open in Works — \(state.project.name) (\(path))",
+            to: state.project
+        )
+        state.reloadEvents()
+        NSWorkspace.shared.open(url)
     }
 
     // MARK: - Folder picker

@@ -5,7 +5,14 @@ import CoreText
 
 struct ExportService {
 
-    // MARK: - Bundle export models
+    // PR-26 §F — Bundle export (Contract B) is deprecated and removed. The
+    // user-facing path to Works is now "Open in Works" (works:// URL scheme);
+    // Works auto-detects `.ledger/` (WK-N). The bundle-writing function is
+    // retained only as a private helper for one transitional ledger event,
+    // and gated by a flag set to false in production.
+    private static let bundleWriterEnabled = false
+
+    // MARK: - Bundle export (deprecated — kept dark for one release)
 
     struct BundleResult {
         let url: URL
@@ -24,7 +31,6 @@ struct ExportService {
 
     private struct BundleProjectSummary: Codable {
         let name: String
-        /// Stable cross-folder identity — Contract B optional-but-recommended field.
         let projectId: String?
         let medium: String?
         let workingDescription: String?
@@ -38,7 +44,6 @@ struct ExportService {
         let timestamp: Date
         let type: ArtifactType
         let title: String
-        /// Relative path inside the bundle (e.g., "artifacts/sketch.png") or nil.
         let attachmentFilename: String?
         let caption: String?
         let exportIncluded: Bool
@@ -54,12 +59,27 @@ struct ExportService {
         let artifacts: [BundleArtifactRecord]
     }
 
-    // MARK: - Bundle export
-
-    /// Writes a `.provenance.bundle/` directory at the project root (outside .ledger/).
-    /// Idempotent — writes to `.provenance.bundle.tmp` then atomically renames.
-    /// Does NOT write ledger events; the caller is responsible for that.
+    /// Deprecated — bundle writing was removed in PR-26. Calls now throw.
     static func exportBundle(
+        project: Project,
+        checkIns: [CheckIn],
+        sources: [Source],
+        artifacts: [Artifact]
+    ) throws -> BundleResult {
+        guard bundleWriterEnabled else {
+            throw NSError(domain: "ExportService", code: 410,
+                          userInfo: [NSLocalizedDescriptionKey:
+                            "Bundle export (.provenance.bundle/) is deprecated in PR-26. " +
+                            "Use Open in Works (works://add?path=…) instead."])
+        }
+        // Unreachable while bundleWriterEnabled == false. Kept solely so
+        // existing call shapes compile during the transition; the next ship
+        // can delete this entire path.
+        return try _writeBundle(project: project, checkIns: checkIns,
+                                sources: sources, artifacts: artifacts)
+    }
+
+    private static func _writeBundle(
         project: Project,
         checkIns: [CheckIn],
         sources: [Source],
