@@ -414,10 +414,11 @@ struct ManuscriptCard: View {
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
-        .background(Brand.surfaceSunken)
+        // PR-23 §B: manuscript-row tile bg = Brand.surfaceSidebar.
+        .background(Brand.surfaceSidebar)
         .overlay(
             RoundedRectangle(cornerRadius: Brand.radiusMd)
-                .stroke(Brand.border, lineWidth: 0.5)
+                .stroke(Brand.borderSubtle, lineWidth: 0.5)
         )
         .cornerRadius(Brand.radiusMd)
         .contextMenu {

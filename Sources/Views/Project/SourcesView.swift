@@ -118,10 +118,11 @@ struct SourceCardView: View {
             .font(.system(size: 12))
         }
         .padding(Brand.spaceMD)
-        .background(Brand.surfaceSunken.opacity(0.5))
+        // PR-23 §B: source tile bg = Brand.surfaceSidebar, matching artifact/check-in tiles.
+        .background(Brand.surfaceSidebar)
         .overlay(
             RoundedRectangle(cornerRadius: Brand.radiusMd)
-                .stroke(Brand.border, lineWidth: 0.5)
+                .stroke(Brand.borderSubtle, lineWidth: 0.5)
         )
         .cornerRadius(Brand.radiusMd)
         .contextMenu {

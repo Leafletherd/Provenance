@@ -259,11 +259,10 @@ struct ArtifactCardView: View {
             .font(.system(size: 12))
         }
         .padding(Brand.spaceMD)
-        // PR-22 §C4 (follow-up): surfaceSelected (warm beige) card background —
-        // matches the sidebar selection treatment so cards read as distinct
-        // surfaces against the surfaceBase body, not floating white patches.
-        // Inner thumbnail area (surfaceSunken) stays as-is.
-        .background(Brand.surfaceSelected)
+        // PR-23 §B: tile bg = Brand.surfaceSidebar (sidebar tan in light, warm
+        // grey in dark). Distinct from the surfaceBase body, matches the sidebar's
+        // tan, and adapts in dark mode to match Export pill backing chrome.
+        .background(Brand.surfaceSidebar)
         .overlay(
             RoundedRectangle(cornerRadius: Brand.radiusLg)
                 .stroke(Brand.borderSubtle, lineWidth: 0.5)

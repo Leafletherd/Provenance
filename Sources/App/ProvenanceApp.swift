@@ -15,11 +15,11 @@ struct ProvenanceApp: App {
                 .onOpenURL { url in
                     appState.handleURL(url)
                 }
-                // PR-22 §B1 (follow-up): use surfaceBase (plain cream) here and
-                // everywhere else so the toolbar, tab bar, and body all share one
-                // continuous cream surface — no green-tinted titlebarBg band.
-                .toolbarBackground(Brand.surfaceBase, for: .windowToolbar)
-                .toolbarBackground(.visible, for: .windowToolbar)
+                // PR-23 §A: do NOT force a global toolbar background — that
+                // paints OVER the sidebar's surfaceSidebar (tan) in the title-bar
+                // region, creating a seam. Instead, each column paints its own
+                // background up through the title bar via .ignoresSafeArea(),
+                // and the NSWindow backgroundColor (surfaceBase) is the fallback.
         }
         // §5a: default 1100×720 on first launch; SwiftUI persists user-resize automatically
         .defaultSize(width: 1100, height: 720)

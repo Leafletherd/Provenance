@@ -166,6 +166,13 @@ struct SidebarView: View {
             .listStyle(.sidebar)
             .scrollContentBackground(.hidden)
             .background(Color.clear)
+            // PR-23 §D: press state must match the settled selection. The List's
+            // press highlight uses the inherited .tint() — by default ContentView
+            // sets .tint(Brand.accent) (teal-green), which flashes briefly under
+            // a mouse-down before our surfaceSelected .listRowBackground paints.
+            // Overriding the List's tint to surfaceSelected makes press and
+            // settled paint identically — no flicker.
+            .tint(Brand.surfaceSelected)
             }
         }
         .safeAreaInset(edge: .bottom) {

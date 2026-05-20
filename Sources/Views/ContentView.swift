@@ -12,6 +12,13 @@ struct ContentView: View {
                 .navigationSplitViewColumnWidth(min: 180, ideal: 220, max: 320)
         } detail: {
             ZStack {
+                // PR-23 §A: paint surfaceBase up through the title bar in the
+                // body column — mirrors the sidebar column's surfaceSidebar
+                // ignoresSafeArea, so the two columns meet at the column boundary
+                // with no white toolbar band on top.
+                Brand.surfaceBase
+                    .ignoresSafeArea()
+
                 if appState.isHomeSelected || appState.selectedProjectID == nil {
                     HomeView()
                         .environmentObject(appState)
@@ -51,12 +58,11 @@ struct ContentView: View {
         // PR-20 §B — prov/accent tint propagates to all .borderedProminent buttons and
         // system UI tint throughout the app, replacing system blue.
         .tint(Brand.accent)
-        // C — PR-21: Force toolbar background on the SwiftUI side in addition to the
-        // NSWindow-level titlebarAppearsTransparent + backgroundColor set in
-        // ProvenanceWindowConfigurator. Without both, macOS can briefly flash a white
-        // toolbar on initial display or when navigating between views.
-        .toolbarBackground(Brand.surfaceBase, for: .windowToolbar)
-        .toolbarBackground(.visible, for: .windowToolbar)
+        // PR-23 §A: no global .toolbarBackground — that would override the
+        // per-column surfaceSidebar / surfaceBase backgrounds painted up through
+        // the title bar by .ignoresSafeArea() on each column, producing a seam
+        // between the title bar and the sidebar tan. NSWindow.titlebarAppearsTransparent
+        // = true (set in ProvenanceWindowConfigurator) lets each column show through.
         // Title bar is transparent (set in ProvenanceWindowConfigurator below) so each
         // column's own background paints through it — body shows surfaceBase tan,
         // sidebar shows surfaceSidebar white.

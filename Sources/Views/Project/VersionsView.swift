@@ -44,7 +44,17 @@ struct VersionsView: View {
                                 selectedSnapshot = snapshot
                             }
                             .listRowInsets(EdgeInsets(top: 4, leading: 12, bottom: 4, trailing: 12))
-                            .listRowBackground(Color.clear)
+                            // PR-23 §B: snapshot rows render as tiles with the
+                            // sidebar-tan fill + subtle border (light/dark adaptive).
+                            .listRowBackground(
+                                RoundedRectangle(cornerRadius: Brand.radiusMd)
+                                    .fill(Brand.surfaceSidebar)
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: Brand.radiusMd)
+                                            .stroke(Brand.borderSubtle, lineWidth: 0.5)
+                                    )
+                                    .padding(.vertical, 2)
+                            )
                     }
                 }
                 .listStyle(.inset)

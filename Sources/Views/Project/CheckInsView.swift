@@ -116,10 +116,10 @@ struct CheckInCardView: View {
             .font(.system(size: 12))
         }
         .padding(Brand.spaceMD)
-        // PR-22 §C4 (follow-up): surfaceSelected (warm beige) card background —
-        // matches the sidebar selection treatment so cards sit visually distinct
-        // against the surfaceBase body rather than appearing to float.
-        .background(Brand.surfaceSelected)
+        // PR-23 §B: tile bg = Brand.surfaceSidebar (sidebar tan in light, warm
+        // grey in dark). Matches the sidebar column so all tan surfaces in the
+        // app share one token.
+        .background(Brand.surfaceSidebar)
         .overlay(
             RoundedRectangle(cornerRadius: Brand.radiusMd)
                 .stroke(Brand.borderSubtle, lineWidth: 0.5)
