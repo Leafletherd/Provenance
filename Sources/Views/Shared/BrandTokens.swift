@@ -61,6 +61,12 @@ enum Brand {
     /// Legacy alias used in existing code — points to new tintSurface.
     static let accentDim   = tintSurface
 
+    // MARK: - PR-25 export-template colors (token-driven; no hex literals in PDF code)
+    /// Tan-400 — Review export timeline dots (no teal distinction in Review).
+    static let tan400      = Color("tan400", bundle: .main)
+    /// Ochre-600 — Review export status labels (warm amber, replaces teal).
+    static let ochre600    = Color("ochre600", bundle: .main)
+
     // MARK: - Radii (as CGFloat for use with .cornerRadius / clipShape)
     static let radiusSm: CGFloat =   3
     static let radiusMd: CGFloat =   6

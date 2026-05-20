@@ -431,7 +431,8 @@ struct ExportService {
             outputURL = project.exportURL.appendingPathComponent(filename)
         }
 
-        try AuthorshipReportRenderer.render(
+        // PR-25 — route to the new spec-compliant renderer.
+        try ProvenancePDFRenderer.renderAuthorship(
             to: outputURL,
             project: project,
             authorName: authorName,
@@ -444,6 +445,166 @@ struct ExportService {
             chain: chain
         )
         return outputURL
+    }
+
+    // MARK: - Review export (PR-25)
+
+    /// Renders the spec-compliant Review export PDF.
+    static func exportReviewPDF(
+        project: Project,
+        authorName: String,
+        checkIns: [CheckIn],
+        sources: [Source],
+        artifacts: [Artifact],
+        manuscripts: [Manuscript],
+        events: [LedgerEvent],
+        to destinationURL: URL? = nil
+    ) throws -> URL {
+        let fm = FileManager.default
+        let outputURL: URL
+        if let dest = destinationURL {
+            outputURL = dest
+        } else {
+            try fm.createDirectory(at: project.exportURL, withIntermediateDirectories: true)
+            let dateStr = DateFormatter.localizedString(from: Date(), dateStyle: .short, timeStyle: .none)
+                .replacingOccurrences(of: "/", with: "-")
+            let filename = "\(project.name)-review-\(dateStr).pdf"
+                .replacingOccurrences(of: " ", with: "_")
+            outputURL = project.exportURL.appendingPathComponent(filename)
+        }
+        try ProvenancePDFRenderer.renderReview(
+            to: outputURL,
+            project: project,
+            authorName: authorName,
+            checkIns: checkIns,
+            sources: sources,
+            artifacts: artifacts,
+            manuscripts: manuscripts,
+            events: events
+        )
+        return outputURL
+    }
+
+    /// PR-25 — Review export as Markdown using the same section structure as the
+    /// Review PDF (YAML frontmatter header, H2 section labels, `---` rules).
+    static func exportReviewMarkdown(
+        project: Project,
+        authorName: String,
+        checkIns: [CheckIn],
+        sources: [Source],
+        artifacts: [Artifact],
+        events: [LedgerEvent],
+        to destinationURL: URL? = nil
+    ) throws -> URL {
+        let fm = FileManager.default
+        let outputURL: URL
+        if let dest = destinationURL {
+            outputURL = dest
+        } else {
+            try fm.createDirectory(at: project.exportURL, withIntermediateDirectories: true)
+            let dateStr = DateFormatter.localizedString(from: Date(), dateStyle: .short, timeStyle: .none)
+                .replacingOccurrences(of: "/", with: "-")
+            let filename = "\(project.name)-review-\(dateStr).md"
+                .replacingOccurrences(of: " ", with: "_")
+            outputURL = project.exportURL.appendingPathComponent(filename)
+        }
+        let md = buildReviewMarkdown(
+            project: project,
+            authorName: authorName,
+            checkIns: checkIns.filter { $0.exportIncluded },
+            artifacts: artifacts.filter { $0.exportIncluded },
+            events: events
+        )
+        try Data(md.utf8).write(to: outputURL, options: .atomic)
+        return outputURL
+    }
+
+    private static func buildReviewMarkdown(
+        project: Project, authorName: String,
+        checkIns: [CheckIn], artifacts: [Artifact], events: [LedgerEvent]
+    ) -> String {
+        let fmt = DateFormatter()
+        fmt.dateStyle = .medium
+        fmt.timeStyle = .none
+
+        let snapshotCount = events.filter {
+            $0.type == .snapshotAuto || $0.type == .snapshotScheduled || $0.type == .snapshotManual
+        }.count
+        let earliest: Date = events.first?.timestamp ?? project.connectedAt
+        let dateRange = "\(fmt.string(from: earliest))–\(fmt.string(from: Date()))"
+
+        var md = "---\n"
+        md += "title: \"\(project.name)\"\n"
+        if !authorName.isEmpty { md += "author: \"\(authorName)\"\n" }
+        if let m = project.medium, !m.isEmpty { md += "medium: \"\(m)\"\n" }
+        md += "date_range: \"\(dateRange)\"\n"
+        md += "versions: \(snapshotCount)\n"
+        md += "check_ins: \(checkIns.count)\n"
+        md += "artifacts: \(artifacts.count)\n"
+        md += "connected: \"\(fmt.string(from: project.connectedAt))\"\n"
+        md += "document_type: Review Export\n"
+        md += "generated_by: Provenance\n"
+        md += "---\n\n"
+
+        // ── Description ───────────────────────────────────────────────────────
+        md += "## Description\n\n"
+        if let m = project.medium, !m.isEmpty {
+            md += "**Medium** \(m)\n\n"
+        }
+        if let d = project.workingDescription, !d.isEmpty {
+            md += "\(d)\n\n"
+        }
+        if let i = project.intent, !i.isEmpty {
+            md += "\(i)\n\n"
+        }
+        md += "---\n\n"
+
+        // ── Check-ins ─────────────────────────────────────────────────────────
+        md += "## Check-ins\n\n"
+        if checkIns.isEmpty {
+            md += "_No check-ins included._\n\n"
+        } else {
+            for c in checkIns.reversed() {
+                md += "**\(fmt.string(from: c.timestamp))** — _[\(c.status.label.uppercased())]_\n\n"
+                md += c.text.isEmpty ? "_(no content)_\n\n" : "\(c.text)\n\n"
+            }
+        }
+        md += "---\n\n"
+
+        // ── Artifacts ─────────────────────────────────────────────────────────
+        md += "## Artifacts\n\n"
+        if artifacts.isEmpty {
+            md += "_No artifacts included._\n\n"
+        } else {
+            for a in artifacts {
+                md += "**\(a.title)** — _\(a.type.rawValue) · \(fmt.string(from: a.timestamp))_\n\n"
+                if let c = a.caption, !c.isEmpty { md += "\(c)\n\n" }
+            }
+        }
+        md += "---\n\n"
+
+        // ── Process timeline ──────────────────────────────────────────────────
+        md += "## Process timeline\n\n"
+        struct Item { let date: Date; let title: String; let detail: String }
+        var items: [Item] = []
+        items.append(Item(date: project.connectedAt, title: "Project connected", detail: project.name))
+        for e in events.suffix(40) {
+            items.append(Item(date: e.timestamp, title: e.type.displayName, detail: e.detail))
+        }
+        for c in checkIns.suffix(12) {
+            items.append(Item(date: c.timestamp, title: "Check-in [\(c.status.label)]",
+                              detail: String(c.text.prefix(120))))
+        }
+        for a in artifacts.suffix(12) {
+            items.append(Item(date: a.timestamp, title: "Artifact added", detail: a.title))
+        }
+        items.sort { $0.date < $1.date }
+        for it in items {
+            md += "- **\(fmt.string(from: it.date))** — \(it.title)"
+            if !it.detail.isEmpty { md += ": \(it.detail)" }
+            md += "\n"
+        }
+        return md
     }
 
     // MARK: - PDF export (existing)

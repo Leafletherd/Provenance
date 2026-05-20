@@ -26,14 +26,14 @@ struct SettingsView: View {
 
             Divider().padding(.top, Brand.spaceLG)
 
-            // MARK: Export
+            // MARK: Export — PR-25: intent-first picker.
             settingSection(
-                title: "Export",
-                description: "Pre-selects this format when you open the Export sheet. Can be changed per-export."
+                title: "Default Export Intent",
+                description: "Pre-selects this intent when you open the Export tab. Can be changed per-export."
             ) {
                 Picker("", selection: $defaultExportFormat) {
-                    ForEach(ExportFormat.allCases, id: \.rawValue) { fmt in
-                        Text(fmt.label).tag(fmt.rawValue)
+                    ForEach(ExportIntent.allCases, id: \.rawValue) { intent in
+                        Text(intent.label).tag(intent.rawValue)
                     }
                 }
                 .pickerStyle(.menu)

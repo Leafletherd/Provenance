@@ -1,43 +1,42 @@
 import SwiftUI
 import AppKit
 
-// MARK: - Export format
+// MARK: - Export intent + format (PR-25)
 
-enum ExportFormat: String, CaseIterable {
-    case pdf             = "pdf"
-    case bundle          = "bundle"
-    case markdown        = "markdown"
-    case authorshipReport = "authorship_report"
+/// PR-25 §A1 — intent-first picker. Two intents:
+///   - Review: PDF or Markdown
+///   - Authorship Report: PDF only
+/// "Bundle for Works" is no longer in the user-facing format picker (§B1);
+/// the bundle code is invoked only by the "Promote to Works…" action.
+enum ExportIntent: String, CaseIterable {
+    case review
+    case authorship
 
     var label: String {
         switch self {
-        case .pdf:             return "PDF Report"
-        case .bundle:          return "Bundle for Works"
-        case .markdown:        return "Markdown"
-        case .authorshipReport: return "Authorship"
+        case .review:     return "Review"
+        case .authorship: return "Authorship Report"
         }
     }
 
-    var icon: String {
+    var description: String {
         switch self {
-        case .pdf:             return "doc.richtext"
-        case .bundle:          return "shippingbox"
-        case .markdown:        return "doc.plaintext"
-        case .authorshipReport: return "doc.badge.clock"
+        case .review:
+            return "A printable or shareable summary of your project: description, check-ins, artifacts, and recent activity."
+        case .authorship:
+            return "A ledger-backed PDF report proving authorship and process history. Used for forensic, legal, or archival purposes."
         }
     }
+}
 
-    /// One-line description shown under the picker.
-    var shortDescription: String {
+enum ReviewFormat: String, CaseIterable {
+    case pdf
+    case markdown
+
+    var label: String {
         switch self {
-        case .pdf:
-            return "A printable report of your project\u{2019}s check-ins, sources, artifacts, and recent snapshots."
-        case .bundle:
-            return "A structured handoff for Works. Writes .provenance.bundle/ at the project root."
-        case .markdown:
-            return "A single .md file containing the project\u{2019}s metadata, check-ins, sources, and artifact list."
-        case .authorshipReport:
-            return "A structured PDF designed for academic submission. Includes the full process timeline, sources, paste events, check-ins, and integrity chain status."
+        case .pdf:      return "PDF"
+        case .markdown: return "Markdown"
         }
     }
 }
@@ -47,7 +46,9 @@ enum ExportFormat: String, CaseIterable {
 struct ExportView: View {
     @ObservedObject var state: ProjectState
 
-    @State private var selectedFormat: ExportFormat = .pdf
+    // PR-25 — intent-first state.
+    @State private var selectedIntent: ExportIntent = .review
+    @State private var reviewFormat: ReviewFormat = .pdf
     @State private var isExporting = false
     @State private var exportConfirmation: String? = nil
     @State private var exportError: String? = nil
@@ -71,34 +72,68 @@ struct ExportView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: Brand.spaceXL) {
 
-                // ── Format ────────────────────────────────────────────────────
+                // ── Format (PR-25 §A1) ───────────────────────────────────────
                 sectionHeader("Format")
 
-                VStack(alignment: .leading, spacing: Brand.spaceSM) {
-                    Picker("", selection: $selectedFormat) {
-                        ForEach(ExportFormat.allCases, id: \.self) { fmt in
-                            Text(fmt.label).tag(fmt)
+                VStack(alignment: .leading, spacing: Brand.spaceMD) {
+                    // Intent picker — Review / Authorship Report
+                    Picker("", selection: $selectedIntent) {
+                        ForEach(ExportIntent.allCases, id: \.self) { intent in
+                            Text(intent.label).tag(intent)
                         }
                     }
-                    .pickerStyle(.segmented)
+                    .pickerStyle(.radioGroup)
                     .labelsHidden()
 
-                    Text(selectedFormat.shortDescription)
-                        .font(.system(size: 13))
+                    // Nested format toggle under the selected intent.
+                    HStack(spacing: Brand.spaceSM) {
+                        Text("Output:")
+                            .font(.system(size: 12))
+                            .foregroundColor(Brand.textSecondary)
+                        switch selectedIntent {
+                        case .review:
+                            Picker("", selection: $reviewFormat) {
+                                ForEach(ReviewFormat.allCases, id: \.self) { f in
+                                    Text(f.label).tag(f)
+                                }
+                            }
+                            .pickerStyle(.segmented)
+                            .labelsHidden()
+                            .frame(width: 200)
+                        case .authorship:
+                            // PDF-only pill (non-interactive, with tooltip).
+                            Text("PDF")
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundColor(Brand.accent)
+                                .padding(.horizontal, Brand.spaceSM)
+                                .padding(.vertical, 3)
+                                .background(Brand.accent.opacity(0.1))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: Brand.radiusMd)
+                                        .stroke(Brand.accent.opacity(0.4), lineWidth: 0.5)
+                                )
+                                .cornerRadius(Brand.radiusMd)
+                                .help("Authorship reports are PDF only.")
+                        }
+                        Spacer()
+                    }
+                    .padding(.leading, 4)
+
+                    // Intent-specific description (System UI 11pt, text/secondary).
+                    Text(selectedIntent.description)
+                        .font(.system(size: 11))
                         .foregroundColor(Brand.textSecondary)
 
-                    // Author name field — only for Authorship Report
-                    if selectedFormat == .authorshipReport {
-                        HStack(spacing: Brand.spaceSM) {
-                            Text("Author name:")
-                                .font(.system(size: 13))
-                                .foregroundColor(Brand.textSecondary)
-                            TextField("Your name", text: $authorName)
-                                .textFieldStyle(.roundedBorder)
-                                .font(.system(size: 13))
-                        }
-                        .padding(.top, 2)
+                    // Author name field — required for Authorship, optional for Review.
+                    HStack(spacing: Brand.spaceSM) {
+                        Text("Author name:")
+                            .font(.system(size: 13))
+                            .foregroundColor(Brand.textSecondary)
+                        TextField("Your name", text: $authorName)
+                            .textFieldStyle(.roundedBorder)
+                            .font(.system(size: 13))
                     }
+                    .padding(.top, 2)
                 }
 
                 // ── Will be included ──────────────────────────────────────────
@@ -117,8 +152,10 @@ struct ExportView: View {
                         .foregroundColor(Brand.textMuted)
                         .padding(.top, Brand.spaceXS)
 
-                    // Integrity indicator
-                    integrityLine
+                    // PR-25 §A3 — integrity line only relevant for Authorship Report.
+                    if selectedIntent == .authorship {
+                        integrityLine
+                    }
                 }
 
                 // ── Export action ─────────────────────────────────────────────
@@ -286,74 +323,40 @@ struct ExportView: View {
 
     // MARK: - Export action
 
+    // PR-25 — intent-first export dispatch.
     private func runExport() {
-        let proj     = state.project
-        let cis      = state.checkIns
-        let srcs     = state.sources
-        let arts     = state.artifacts
-        let snaps    = state.snapshots
-        let evs      = state.events
-        let mss      = state.manuscripts
-        let fmt      = selectedFormat
-        let author   = authorName
-        let iStatus  = state.integrityStatus
-        let chain    = LedgerIntegrity.readChain(from: state.project)
+        let proj    = state.project
+        let cis     = state.checkIns
+        let srcs    = state.sources
+        let arts    = state.artifacts
+        let evs     = state.events
+        let mss     = state.manuscripts
+        let author  = authorName
+        let iStatus = state.integrityStatus
+        let chain   = LedgerIntegrity.readChain(from: state.project)
+        let intent  = selectedIntent
+        let format  = reviewFormat
 
-        // F — PR-21: Bundle export writes to .provenance.bundle/ at project root —
-        // no save panel needed (it's a fixed-location handoff for Works).
-        // All other formats present an NSSavePanel so the user picks where to save.
-
-        if fmt == .bundle {
-            isExporting = true
-            exportConfirmation = nil
-            exportError = nil
-            Task {
-                do {
-                    let result = try await Task.detached(priority: .userInitiated) {
-                        try ExportService.exportBundle(project: proj, checkIns: cis,
-                                                       sources: srcs, artifacts: arts)
-                    }.value
-                    await MainActor.run {
-                        let detail = "Bundle exported with \(result.checkInCount) check-in\(result.checkInCount == 1 ? "" : "s"), " +
-                                     "\(result.sourceCount) source\(result.sourceCount == 1 ? "" : "s"), " +
-                                     "\(result.artifactCount) artifact\(result.artifactCount == 1 ? "" : "s")."
-                        LedgerWriter.appendEvent(type: .bundleExported, detail: detail, to: proj)
-                        state.reloadEvents()
-                        isExporting = false
-                        exportConfirmation = "Exported to .provenance.bundle/"
-                    }
-                } catch {
-                    await MainActor.run {
-                        isExporting = false
-                        exportError = error.localizedDescription
-                    }
-                }
-            }
-            return
-        }
-
-        // For PDF, Markdown, and Authorship Report — present NSSavePanel first.
         let savePanel = NSSavePanel()
-        savePanel.directoryURL = proj.folderURL    // default to project root
+        savePanel.directoryURL = proj.folderURL
         savePanel.title = "Export \(proj.name)"
 
-        switch fmt {
-        case .pdf:
-            savePanel.allowedContentTypes = [.pdf]
-            savePanel.nameFieldStringValue = "\(proj.name)-provenance-export.pdf"
-        case .markdown:
-            savePanel.allowedContentTypes = [.plainText]
-            savePanel.nameFieldStringValue = "\(proj.name)-provenance-export.md"
-        case .authorshipReport:
+        switch intent {
+        case .authorship:
             savePanel.allowedContentTypes = [.pdf]
             savePanel.nameFieldStringValue = "\(proj.name)-authorship-report.pdf"
-        case .bundle:
-            break  // handled above
+        case .review:
+            switch format {
+            case .pdf:
+                savePanel.allowedContentTypes = [.pdf]
+                savePanel.nameFieldStringValue = "\(proj.name)-review.pdf"
+            case .markdown:
+                savePanel.allowedContentTypes = [.plainText]
+                savePanel.nameFieldStringValue = "\(proj.name)-review.md"
+            }
         }
 
-        guard savePanel.runModal() == .OK, let destURL = savePanel.url else {
-            return  // user cancelled — do nothing
-        }
+        guard savePanel.runModal() == .OK, let destURL = savePanel.url else { return }
 
         isExporting = true
         exportConfirmation = nil
@@ -361,33 +364,10 @@ struct ExportView: View {
 
         Task {
             do {
-                switch fmt {
-
-                case .pdf:
-                    let url = try await Task.detached(priority: .userInitiated) {
-                        try ExportService.export(project: proj, checkIns: cis, sources: srcs,
-                                                  artifacts: arts, snapshots: snaps, events: evs,
-                                                  to: destURL)
-                    }.value
-                    await MainActor.run {
-                        isExporting = false
-                        exportConfirmation = "Exported to \(url.lastPathComponent)"
-                    }
-
-                case .markdown:
-                    let url = try await Task.detached(priority: .userInitiated) {
-                        try ExportService.exportMarkdown(project: proj, checkIns: cis,
-                                                         sources: srcs, artifacts: arts,
-                                                         snapshots: snaps, events: evs,
-                                                         to: destURL)
-                    }.value
-                    await MainActor.run {
-                        isExporting = false
-                        exportConfirmation = "Exported to \(url.lastPathComponent)"
-                    }
-
-                case .authorshipReport:
-                    let url = try await Task.detached(priority: .userInitiated) {
+                let outURL: URL
+                switch intent {
+                case .authorship:
+                    outURL = try await Task.detached(priority: .userInitiated) {
                         try ExportService.exportAuthorshipReport(
                             project: proj, authorName: author,
                             checkIns: cis, sources: srcs, artifacts: arts,
@@ -395,13 +375,29 @@ struct ExportView: View {
                             integrityStatus: iStatus, chain: chain,
                             to: destURL)
                     }.value
-                    await MainActor.run {
-                        isExporting = false
-                        exportConfirmation = "Exported to \(url.lastPathComponent)"
+                case .review:
+                    switch format {
+                    case .pdf:
+                        outURL = try await Task.detached(priority: .userInitiated) {
+                            try ExportService.exportReviewPDF(
+                                project: proj, authorName: author,
+                                checkIns: cis, sources: srcs, artifacts: arts,
+                                manuscripts: mss, events: evs,
+                                to: destURL)
+                        }.value
+                    case .markdown:
+                        outURL = try await Task.detached(priority: .userInitiated) {
+                            try ExportService.exportReviewMarkdown(
+                                project: proj, authorName: author,
+                                checkIns: cis, sources: srcs, artifacts: arts,
+                                events: evs,
+                                to: destURL)
+                        }.value
                     }
-
-                case .bundle:
-                    break  // unreachable — handled above
+                }
+                await MainActor.run {
+                    isExporting = false
+                    exportConfirmation = "Exported to \(outURL.lastPathComponent)"
                 }
             } catch {
                 await MainActor.run {
