@@ -72,6 +72,8 @@ struct OverviewView: View {
                         }
                         .buttonStyle(.bordered)
                         .controlSize(.small)
+                        // PR-22 §C4: textBrand (tan) tint — not green accent.
+                        .tint(Brand.textBrand)
                     }
                 }
 
@@ -115,6 +117,8 @@ struct OverviewView: View {
                         }
                         .buttonStyle(.bordered)
                         .controlSize(.small)
+                        // PR-22 §C4: textBrand (tan) tint — not green accent.
+                        .tint(Brand.textBrand)
                     }
 
                     if let m = state.project.medium, !m.isEmpty {
@@ -152,6 +156,8 @@ struct OverviewView: View {
                         }
                         .buttonStyle(.bordered)
                         .controlSize(.small)
+                        // PR-22 §C4: textBrand (tan) tint — not green accent.
+                        .tint(Brand.textBrand)
                     }
 
                     if state.manuscripts.isEmpty {

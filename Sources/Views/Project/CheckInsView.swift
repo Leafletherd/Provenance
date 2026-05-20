@@ -116,13 +116,12 @@ struct CheckInCardView: View {
             .font(.system(size: 12))
         }
         .padding(Brand.spaceMD)
-        // Tint cell background — per-app accent tint (teal-50 for Provenance)
-        // signals these as Provenance-owned entries, per the brand color spec's
-        // tint-surface convention.
-        .background(Brand.accentDim)
+        // PR-22 §C4: cream surfaceBase card + subtle border, matching
+        // Seed's bench-card pattern. Replaces accentDim (light green tint).
+        .background(Brand.surfaceBase)
         .overlay(
             RoundedRectangle(cornerRadius: Brand.radiusMd)
-                .stroke(Brand.border, lineWidth: 0.5)
+                .stroke(Brand.borderSubtle, lineWidth: 0.5)
         )
         .cornerRadius(Brand.radiusMd)
     }

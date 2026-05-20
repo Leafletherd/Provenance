@@ -105,7 +105,9 @@ private struct TabButton: View {
                     RoundedRectangle(cornerRadius: Brand.radiusMd)
                         .fill(
                             isSelected
-                                ? Brand.accentDim
+                                // PR-22 §C3: neutral surfaceSelected replaces accentDim
+                                // (light green tint) for the selected tab background.
+                                ? Brand.surfaceSelected
                                 : (hovering ? Brand.surfaceHover : Color.clear)
                         )
                 )

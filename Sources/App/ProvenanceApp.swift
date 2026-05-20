@@ -15,6 +15,13 @@ struct ProvenanceApp: App {
                 .onOpenURL { url in
                     appState.handleURL(url)
                 }
+                // PR-22 §B1: apply toolbar background at the App/Scene root so
+                // it takes effect on the FIRST layout pass — not just after a
+                // NavigationSplitView re-render triggers re-application. Without
+                // this, macOS can display a white toolbar band on initial launch
+                // before ContentView's .toolbarBackground fires.
+                .toolbarBackground(Brand.titlebarBg, for: .windowToolbar)
+                .toolbarBackground(.visible, for: .windowToolbar)
         }
         // §5a: default 1100×720 on first launch; SwiftUI persists user-resize automatically
         .defaultSize(width: 1100, height: 720)

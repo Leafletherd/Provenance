@@ -125,10 +125,20 @@ private struct ProvenanceWindowConfigurator: NSViewRepresentable {
         guard let window = nsView.window else { return }
         if #available(macOS 12.0, *) { window.titlebarSeparatorStyle = .none }
         window.titlebarAppearsTransparent = true
-        // Per spec § 00: titlebar = surfaceSidebar + 5% app-tint wash. The
-        // sidebar column's own .background(surfaceSidebar.ignoresSafeArea())
-        // paints through the transparent titlebar for the sidebar region;
-        // the body region of the titlebar gets the tinted titlebarBg.
+        // Per spec § 00: titlebar = surfaceSidebar + 5% app-tint wash.
         window.backgroundColor = NSColor(Brand.titlebarBg)
+
+        // PR-22 §B2: remove the baseline separator the NSToolbar draws under
+        // itself. showsBaselineSeparator is deprecated on macOS 15 but still
+        // the correct call on 13–14. titlebarSeparatorStyle = .none covers 12+.
+        window.toolbar?.showsBaselineSeparator = false
+
+        // PR-22 §B3: force a toolbar layout pass on the next tick so the
+        // toolbarBackground applied at App level propagates before the first
+        // frame is drawn. Prevents the white-band flash seen on initial mount.
+        DispatchQueue.main.async {
+            window.toolbar?.validateVisibleItems()
+            window.layoutIfNeeded()
+        }
     }
 }

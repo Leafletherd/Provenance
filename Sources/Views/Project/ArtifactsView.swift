@@ -259,12 +259,14 @@ struct ArtifactCardView: View {
             .font(.system(size: 12))
         }
         .padding(Brand.spaceMD)
-        // Tint cell background — per-app accent tint (teal-50 for Provenance)
-        // per the brand color spec's tint-surface convention.
-        .background(Brand.accentDim)
+        // PR-22 §C4: cream surfaceBase card + subtle border stroke.
+        // Replaces accentDim (light green tint) which the user identified
+        // as the "light green outer background" in the Artifacts tab screenshot.
+        // Inner thumbnail area (surfaceSunken) stays warm beige — correct.
+        .background(Brand.surfaceBase)
         .overlay(
             RoundedRectangle(cornerRadius: Brand.radiusLg)
-                .stroke(Brand.border, lineWidth: 0.5)
+                .stroke(Brand.borderSubtle, lineWidth: 0.5)
         )
         .cornerRadius(Brand.radiusLg)
         .contextMenu {
