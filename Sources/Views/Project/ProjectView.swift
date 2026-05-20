@@ -17,45 +17,47 @@ struct ProjectView: View {
     @State private var selectedTab: ProjectTab = .overview
 
     var body: some View {
-        VStack(spacing: 0) {
-            // ── Tab bar (PR-26 §A + §B) ───────────────────────────────────
-            // PR-26 §A — Option 2 (gradient): the header still reads as a
-            // distinct color regardless of upstream chrome decisions, so paint
-            // a left-to-right gradient (surfaceSidebar → surfaceBase) behind
-            // the tab row that resolves to surfaceBase within the first ~25%.
-            // The right portion is indistinguishable from the body bg; the
-            // left meets the sidebar's tan with no seam.
-            //
-            // PR-26 §B — vertical padding is symmetric (Brand.spaceSM top
-            // AND bottom) so the tab labels sit equidistant from the top and
-            // bottom of the bar. TabButton itself uses symmetric vertical
-            // padding (no asymmetry per chip).
-            HStack(spacing: Brand.spaceSM) {
-                ForEach(ProjectTab.allCases, id: \.self) { tab in
-                    TabButton(
-                        tab: tab,
-                        isSelected: selectedTab == tab
-                    ) {
-                        selectedTab = tab
+        ZStack(alignment: .leading) {
+            // PR-27 §A — Seed bench chrome pattern. The title-bar area above
+            // ProjectView already shows a HARD vertical seam (sidebar tan vs
+            // detail-column cream painted via ignoresSafeArea in ContentView),
+            // which is exactly what Seed's bench shows. Below the title bar
+            // — where ProjectView lives — a narrow gradient strip at the
+            // leading edge softens the seam between the sidebar tan and the
+            // body cream. 24pt was tuned to match Seed's bench by eye.
+            LinearGradient(
+                colors: [Brand.surfaceSidebar, Brand.surfaceBase],
+                startPoint: .leading,
+                endPoint: .trailing
+            )
+            .frame(width: 24)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .allowsHitTesting(false)
+
+            VStack(spacing: 0) {
+                // ── Tab bar (PR-26 §B carried forward) ───────────────────
+                // Vertical padding symmetric so the chip labels sit
+                // equidistant from top/bottom; no background — the leading
+                // gradient strip shows through behind the leftmost tabs.
+                HStack(spacing: Brand.spaceSM) {
+                    ForEach(ProjectTab.allCases, id: \.self) { tab in
+                        TabButton(
+                            tab: tab,
+                            isSelected: selectedTab == tab
+                        ) {
+                            selectedTab = tab
+                        }
                     }
+                    Spacer()
                 }
-                Spacer()
-            }
-            .padding(.horizontal, Brand.spaceLG)
-            .padding(.vertical, Brand.spaceSM)
-            .background(
-                LinearGradient(
-                    colors: [Brand.surfaceSidebar, Brand.surfaceBase],
-                    startPoint: .leading,
-                    endPoint: UnitPoint(x: 0.25, y: 0.5)
+                .padding(.horizontal, Brand.spaceLG)
+                .padding(.vertical, Brand.spaceSM)
+                .overlay(
+                    Rectangle()
+                        .fill(Brand.borderSubtle)
+                        .frame(height: 0.5),
+                    alignment: .bottom
                 )
-            )
-            .overlay(
-                Rectangle()
-                    .fill(Brand.borderSubtle)
-                    .frame(height: 0.5),
-                alignment: .bottom
-            )
 
             // ── Content ───────────────────────────────────────────────────
             Group {
@@ -90,8 +92,9 @@ struct ProjectView: View {
             selectedTab = tab
             appState.pendingDeepLink = nil
         }
-    }
-}
+        }   // close ZStack
+    }       // close body
+}           // close struct ProjectView
 
 // MARK: - Tab button — PR-24 chip-pill design
 

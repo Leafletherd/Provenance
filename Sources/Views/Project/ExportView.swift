@@ -302,7 +302,12 @@ struct ExportView: View {
 
     // MARK: - Export action
 
-    // PR-25 — intent-first export dispatch.
+    /// PR-27 §B — dual-copy export.
+    /// 1. ALWAYS write a timestamped backup to `<project>/.ledger/export/`.
+    /// 2. Then present `NSSavePanel` so the user can save a copy anywhere.
+    /// 3. Copy the backup bytes to the user's chosen location. If the user
+    ///    cancels the panel, the backup is still written — the confirmation
+    ///    message reflects that.
     private func runExport() {
         let proj    = state.project
         let cis     = state.checkIns
@@ -316,26 +321,28 @@ struct ExportView: View {
         let intent  = selectedIntent
         let format  = reviewFormat
 
-        let savePanel = NSSavePanel()
-        savePanel.directoryURL = proj.folderURL
-        savePanel.title = "Export \(proj.name)"
-
+        // ── 1. Backup target (timestamped filename in .ledger/export/) ───
+        let isoFmt = ISO8601DateFormatter()
+        isoFmt.formatOptions = [.withInternetDateTime]
+        let timestamp = isoFmt.string(from: Date())
+            .replacingOccurrences(of: ":", with: "-")
+        let intentSlug: String
+        let ext: String
+        let userDefaultName: String
         switch intent {
         case .authorship:
-            savePanel.allowedContentTypes = [.pdf]
-            savePanel.nameFieldStringValue = "\(proj.name)-authorship-report.pdf"
+            intentSlug = "authorship"
+            ext = "pdf"
+            userDefaultName = "\(proj.name)-authorship-report.pdf"
         case .review:
+            intentSlug = "review"
             switch format {
-            case .pdf:
-                savePanel.allowedContentTypes = [.pdf]
-                savePanel.nameFieldStringValue = "\(proj.name)-review.pdf"
-            case .markdown:
-                savePanel.allowedContentTypes = [.plainText]
-                savePanel.nameFieldStringValue = "\(proj.name)-review.md"
+            case .pdf:      ext = "pdf";  userDefaultName = "\(proj.name)-review.pdf"
+            case .markdown: ext = "md";   userDefaultName = "\(proj.name)-review.md"
             }
         }
-
-        guard savePanel.runModal() == .OK, let destURL = savePanel.url else { return }
+        let backupURL = proj.exportURL
+            .appendingPathComponent("\(timestamp)_\(intentSlug).\(ext)")
 
         isExporting = true
         exportConfirmation = nil
@@ -343,40 +350,79 @@ struct ExportView: View {
 
         Task {
             do {
-                let outURL: URL
+                // Ensure .ledger/export/ exists.
+                try FileManager.default.createDirectory(
+                    at: proj.exportURL,
+                    withIntermediateDirectories: true
+                )
+
+                // ── 2. Generate the backup ───────────────────────────────
                 switch intent {
                 case .authorship:
-                    outURL = try await Task.detached(priority: .userInitiated) {
+                    _ = try await Task.detached(priority: .userInitiated) {
                         try ExportService.exportAuthorshipReport(
                             project: proj, authorName: author,
                             checkIns: cis, sources: srcs, artifacts: arts,
                             manuscripts: mss, events: evs,
                             integrityStatus: iStatus, chain: chain,
-                            to: destURL)
+                            to: backupURL)
                     }.value
                 case .review:
                     switch format {
                     case .pdf:
-                        outURL = try await Task.detached(priority: .userInitiated) {
+                        _ = try await Task.detached(priority: .userInitiated) {
                             try ExportService.exportReviewPDF(
                                 project: proj, authorName: author,
                                 checkIns: cis, sources: srcs, artifacts: arts,
                                 manuscripts: mss, events: evs,
-                                to: destURL)
+                                to: backupURL)
                         }.value
                     case .markdown:
-                        outURL = try await Task.detached(priority: .userInitiated) {
+                        _ = try await Task.detached(priority: .userInitiated) {
                             try ExportService.exportReviewMarkdown(
                                 project: proj, authorName: author,
                                 checkIns: cis, sources: srcs, artifacts: arts,
                                 events: evs,
-                                to: destURL)
+                                to: backupURL)
                         }.value
                     }
                 }
+
+                // ── 3. Present save panel for the user copy ──────────────
                 await MainActor.run {
-                    isExporting = false
-                    exportConfirmation = "Exported to \(outURL.lastPathComponent)"
+                    let panel = NSSavePanel()
+                    panel.directoryURL = proj.folderURL
+                    panel.title = "Save copy of \(proj.name) export"
+                    panel.nameFieldStringValue = userDefaultName
+                    switch ext {
+                    case "pdf": panel.allowedContentTypes = [.pdf]
+                    case "md":  panel.allowedContentTypes = [.plainText]
+                    default: break
+                    }
+
+                    let backupRel = ".ledger/export/\(backupURL.lastPathComponent)"
+                    let response = panel.runModal()
+                    if response == .OK, let userURL = panel.url {
+                        do {
+                            // Overwrite if the user picked an existing path
+                            // (NSSavePanel already warned them).
+                            if FileManager.default.fileExists(atPath: userURL.path) {
+                                try FileManager.default.removeItem(at: userURL)
+                            }
+                            try FileManager.default.copyItem(at: backupURL, to: userURL)
+                            isExporting = false
+                            exportConfirmation =
+                                "Saved to \(userURL.lastPathComponent). Backup at \(backupRel)."
+                        } catch {
+                            isExporting = false
+                            exportError =
+                                "Backup saved at \(backupRel), but couldn't write the user copy: \(error.localizedDescription)"
+                        }
+                    } else {
+                        // User cancelled — backup is still on disk.
+                        isExporting = false
+                        exportConfirmation = "Backup saved at \(backupRel)."
+                    }
                 }
             } catch {
                 await MainActor.run {
